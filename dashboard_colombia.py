@@ -17,7 +17,6 @@
 ║  python dashboard_colombia.py  →  http://127.0.0.1:8050        ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
-#importacionde librerias para crear el dash boarr original 
 
 import os, threading, time, webbrowser
 import pandas as pd
@@ -32,7 +31,7 @@ BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 CSV_PRECIO  = os.path.join(BASE_DIR, "datos_colombia_clean.csv")
 CSV_TES     = os.path.join(BASE_DIR, "tasas_interes_clean.csv")
 CSV_INF     = os.path.join(BASE_DIR, "inflacion_clean.csv")
-CSV_INDICES = os.path.join(BASE_DIR, "indices_colombia_completo.csv")
+CSV_INDICES = os.path.join(BASE_DIR, "indices_colombia.csv")
 CSV_COMP    = os.path.join(BASE_DIR, "icolcap_composicion.csv")
 CSV_PIB     = os.path.join(BASE_DIR, "pib_colombia.csv")
 
@@ -42,25 +41,13 @@ CSV_PIB     = os.path.join(BASE_DIR, "pib_colombia.csv")
 df_precio  = pd.read_csv(CSV_PRECIO,  parse_dates=["fecha"])
 df_tes     = pd.read_csv(CSV_TES,     parse_dates=["fecha"])
 df_inf     = pd.read_csv(CSV_INF,     parse_dates=["fecha"])
-# Índices mensuales reales (Igual Ponderación 32 empresas + 7 Grandes)
-df_indices = pd.read_csv(CSV_INDICES, parse_dates=["Fecha"])
-df_indices["mes"] = df_indices["Fecha"].dt.to_period("M")
-df_indices = df_indices.rename(columns={
-    "Indice_IgualPonderacion": "sintetico_base100",
-    "Indice_7Grandes":         "grandes_base100",
-})
 
-# ICOLCAP base100 diario (del archivo original)
-df_icolcap_b100 = pd.read_csv(
-    os.path.join(BASE_DIR, "indices_colombia.csv"), parse_dates=["fecha"])
-df_icolcap_b100["date"] = df_icolcap_b100["fecha"].dt.normalize()
+# Todos los índices diarios: ICOLCAP base100, sintético, 7 grandes
+df_indices = pd.read_csv(CSV_INDICES, parse_dates=["fecha"])
+df_indices["date"] = df_indices["fecha"].dt.normalize()
 
-df_comp    = pd.read_csv(CSV_COMP)
-df_pib     = pd.read_csv(CSV_PIB, parse_dates=["fecha"])
-
-# Medias móviles ICOLCAP real
-df_precio["sma20"] = df_precio["close"].rolling(20).mean()
-df_precio["sma50"] = df_precio["close"].rolling(50).mean()
+df_comp = pd.read_csv(CSV_COMP)
+df_pib  = pd.read_csv(CSV_PIB, parse_dates=["fecha"])
 
 # Merge diario principal
 for _df in [df_precio, df_tes]:
@@ -68,17 +55,12 @@ for _df in [df_precio, df_tes]:
 
 df_daily = (df_precio
     .merge(df_tes[["date","tes_pesos_1y","tes_pesos_5y","tes_pesos_10y"]], on="date", how="left")
-    .merge(df_icolcap_b100[["date","icolcap_base100"]], on="date", how="left")
+    .merge(df_indices[["date","icolcap_base100","sintetico_base100","grandes_base100"]], on="date", how="left")
     .dropna(subset=["tes_pesos_1y"]).reset_index(drop=True))
 
-# Merge índices mensuales por período
+# (sintetico_base100 y grandes_base100 ya vienen diarios desde indices_colombia.csv)
 df_daily["mes"] = df_daily["fecha"].dt.to_period("M")
-df_daily = df_daily.merge(
-    df_indices[["mes","sintetico_base100","grandes_base100"]],
-    on="mes", how="left")
-
 df_inf["mes"]   = df_inf["fecha"].dt.to_period("M")
-df_daily["mes"] = df_daily["fecha"].dt.to_period("M")
 df_daily = df_daily.merge(
     df_inf[["mes","inflacion_mensual","inflacion_anual"]], on="mes", how="left")
 
@@ -92,7 +74,7 @@ FECHA_FIN = df_daily["fecha"].max()
 GRANDES = df_comp[df_comp["es_grande"]]["ticker"].tolist()
 GRANDES_NOMBRES = dict(zip(df_comp["ticker"], df_comp["nombre"]))
 
-print(f"Dataset: {len(df_daily):,} filas | {FECHA_INI.date()} → {FECHA_FIN.date()}")
+print(f"Dataset: {len(df_daily):,} filas | {FECHA_INI.date()} -> {FECHA_FIN.date()}")
 
 # ══════════════════════════════════════════════════════════
 # 2. PALETA
@@ -108,8 +90,6 @@ MUTED     = "#64748b"
 C_BOLSA    = "#3fb950"   # ICOLCAP real
 C_SINTET   = "#38bdf8"   # Sintético igualitario
 C_GRANDES  = "#fbbf24"   # 7 Grandes
-C_SMA20    = "#94a3b8"
-C_SMA50    = "#e3b341"
 C_INF_M    = "#fb923c"
 C_INF_A    = "#f43f5e"
 C_INF_BAJA = "#4ade80"
@@ -224,7 +204,7 @@ def yaxis_base(title, suffix=""):
 def make_fig_bolsa(dff, x_range=None):
     """
     Un solo gráfico con las 3 versiones del índice colombiano
-    normalizadas a base 100 (Feb 2009) para comparar directamente.
+    normalizadas a base 100 (Ene 2009) para comparar directamente.
     """
     fig = go.Figure()
 
@@ -232,7 +212,7 @@ def make_fig_bolsa(dff, x_range=None):
     fig.add_trace(go.Scatter(
         x=dff["fecha"], y=dff["icolcap_base100"],
         name="ICOLCAP real (base 100)",
-        mode="lines", line=dict(color=C_BOLSA, width=2.2),
+        mode="lines", line=dict(color=C_BOLSA, width=2.5),
         fill="tozeroy", fillcolor="rgba(63,185,80,0.06)",
         hovertemplate="<b>ICOLCAP:</b> %{y:.2f}<extra></extra>",
     ))
@@ -240,8 +220,8 @@ def make_fig_bolsa(dff, x_range=None):
     # ── Índice Sintético — igual ponderación ──────────
     fig.add_trace(go.Scatter(
         x=dff["fecha"], y=dff["sintetico_base100"],
-        name="Índice Igual Ponderación (32 empresas)",
-        mode="lines", line=dict(color=C_SINTET, width=1.8, dash="dot"),
+        name="Índice Igual Ponderación (canasta oficial ICOLCAP)",
+        mode="lines", line=dict(color=C_SINTET, width=2.2),
         hovertemplate="<b>Sintético:</b> %{y:.2f}<extra></extra>",
     ))
 
@@ -249,38 +229,20 @@ def make_fig_bolsa(dff, x_range=None):
     fig.add_trace(go.Scatter(
         x=dff["fecha"], y=dff["grandes_base100"],
         name="Índice 7 Grandes Colombia",
-        mode="lines", line=dict(color=C_GRANDES, width=1.8, dash="dash"),
+        mode="lines", line=dict(color=C_GRANDES, width=2.2),
         hovertemplate="<b>7 Grandes:</b> %{y:.2f}<extra></extra>",
-    ))
-
-    # ── Media móvil 20D (sobre ICOLCAP base 100) ──────
-    sma20_b100 = dff["icolcap_base100"].rolling(20).mean()
-    fig.add_trace(go.Scatter(
-        x=dff["fecha"], y=sma20_b100,
-        name="Media 20 días (ICOLCAP)",
-        mode="lines", line=dict(color=C_SMA20, width=1.1, dash="dot"),
-        hovertemplate="<b>SMA 20:</b> %{y:.2f}<extra></extra>",
-    ))
-
-    # ── Media móvil 50D ────────────────────────────────
-    sma50_b100 = dff["icolcap_base100"].rolling(50).mean()
-    fig.add_trace(go.Scatter(
-        x=dff["fecha"], y=sma50_b100,
-        name="Media 50 días (ICOLCAP)",
-        mode="lines", line=dict(color=C_SMA50, width=1.3, dash="dash"),
-        hovertemplate="<b>SMA 50:</b> %{y:.2f}<extra></extra>",
     ))
 
     # Línea base 100
     fig.add_hline(y=100, line_dash="dot", line_color="#334155", line_width=1,
-        annotation_text=" Base Feb 2009 = 100",
+        annotation_text="  Base Ene 2009 = 100",
         annotation_font=dict(color="#475569", size=9),
         annotation_position="right")
 
     fig.update_layout(
         **BASE_LAYOUT, height=320,
         title=dict(
-            text="③ Bolsa Colombia — ICOLCAP · Índice Igual Ponderación (32 emp.) · 7 Grandes  (base 100 = Ene 2009)",
+            text="③ Bolsa Colombia — ICOLCAP · Índice Igual Ponderación · 7 Grandes  (base 100 = Ene 2009)",
             font=dict(size=11, color="#94a3b8"), x=0),
         xaxis=xaxis_base(x_range),
         yaxis=yaxis_base("Índice (base 100)"),
@@ -676,7 +638,7 @@ app.layout = html.Div([
                     html.Div(d, style={"fontSize":"10px","color":MUTED}),
                 ], style={"marginBottom":"7px"}) for t, c, d in [
                     ("③ Bolsa — 3 líneas en un panel", C_BOLSA,
-                     "Verde = ICOLCAP oficial. Celeste = Índice Igual Ponderación (32 empresas, sin distorsión de Ecopetrol). Amarillo = Índice 7 Grandes Colombia. Base 100 = Ene 2009."),
+                     "Verde = ICOLCAP oficial. Celeste = Índice Igual Ponderación (canasta oficial BVC, ~17-23 empresas según el período). Amarillo = Índice 7 Grandes. Base 100 = Ene 2009."),
                     ("① Inflación (naranja/rojo) + PIB (violeta)", C_PIB,
                      "Barras naranja=sube / verde=baja. Línea roja=inflación acumulada 12M. Barras violeta=crecimiento PIB trimestral. Toggle en el header para mostrar/ocultar."),
                     ("② TES Pesos", C_TES5,
@@ -917,7 +879,7 @@ if __name__ == "__main__":
         webbrowser.open("http://127.0.0.1:8050")
     threading.Thread(target=abrir, daemon=True).start()
     print("\n" + "="*55)
-    print("  Dashboard v8.1 Colombia → http://127.0.0.1:8050")
+    print("  Dashboard v8.1 Colombia -> http://127.0.0.1:8050")
     print("  Para cerrar: Ctrl + C")
     print("="*55 + "\n")
     app.run(debug=False, host="127.0.0.1", port=8050)
