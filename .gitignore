@@ -1,0 +1,12 @@
+# Windows / OneDrive
+desktop.ini
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Herramientas locales
+.gstack/

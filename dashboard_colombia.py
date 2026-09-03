@@ -79,12 +79,12 @@ print(f"Dataset: {len(df_daily):,} filas | {FECHA_INI.date()} -> {FECHA_FIN.date
 # ══════════════════════════════════════════════════════════
 # 2. PALETA
 # ══════════════════════════════════════════════════════════
-BG_APP    = "#0b0f17"
-BG_PANEL  = "#111827"
-BG_CARD   = "#0f172a"
-BG_MODAL  = "#0d1520"
-BORDER    = "#1e293b"
-TEXT      = "#e5e7eb"
+BG_APP    = "#ffffff"
+BG_PANEL  = "#f8fafc"
+BG_CARD   = "#f1f5f9"
+BG_MODAL  = "#ffffff"
+BORDER    = "#e2e8f0"
+TEXT      = "#0f172a"
 MUTED     = "#64748b"
 
 C_BOLSA    = "#3fb950"   # ICOLCAP real
@@ -93,7 +93,7 @@ C_GRANDES  = "#fbbf24"   # 7 Grandes
 C_INF_M    = "#fb923c"
 C_INF_A    = "#f43f5e"
 C_INF_BAJA = "#4ade80"
-C_PIB      = "#a78bfa"   # PIB crecimiento
+C_PIB      = "#14b8a6"   # PIB crecimiento
 C_TES1     = "#ffa657"
 C_TES5     = "#38bdf8"
 C_TES10    = "#bc8cff"
@@ -110,8 +110,11 @@ COLORES_GRANDES = {
 }
 
 TENOR_COLORS = {"tes_pesos_1y": C_TES1, "tes_pesos_5y": C_TES5, "tes_pesos_10y": C_TES10}
-GRID_CLR  = "rgba(148,163,184,0.08)"
-SPIKE_CFG = dict(showspikes=True, spikecolor="#475569", spikethickness=1, spikedash="dot")
+GRID_CLR  = "rgba(100,116,139,0.18)"
+SPIKE_CFG = dict(
+    showspikes=True, spikecolor="#64748b", spikethickness=1,
+    spikedash="solid", spikemode="across", spikesnap="cursor",
+)
 
 # ══════════════════════════════════════════════════════════
 # 3. HELPERS
@@ -173,15 +176,17 @@ def agg_inflacion(dff):
 # 4. BASE LAYOUT
 # ══════════════════════════════════════════════════════════
 BASE_LAYOUT = dict(
-    template="plotly_dark",
+    template="plotly_white",
     paper_bgcolor=BG_PANEL, plot_bgcolor=BG_PANEL,
     hovermode="x unified",
-    hoverlabel=dict(bgcolor="#0f172a", font_size=12, namelength=-1, bordercolor=BORDER),
-    margin=dict(l=60, r=65, t=44, b=50),
+    dragmode="pan",
+    hoverlabel=dict(bgcolor="#ffffff", font_size=12, namelength=-1, bordercolor=BORDER),
+    margin=dict(l=60, r=65, t=10, b=38),
     legend=dict(
-        orientation="h", xanchor="left", x=0, yanchor="top", y=-0.22,
-        bgcolor="rgba(15,23,42,0.88)", bordercolor=BORDER, borderwidth=1,
-        font=dict(color=TEXT, size=11),
+        orientation="h", xanchor="center", x=0.5, yanchor="top", y=-0.18,
+        bgcolor="rgba(15,23,42,0.0)", bordercolor="rgba(0,0,0,0)", borderwidth=0,
+        font=dict(color=MUTED, size=9),
+        itemwidth=30, tracegroupgap=0,
     ),
 )
 
@@ -202,48 +207,40 @@ def yaxis_base(title, suffix=""):
 #   Línea 5: Media 50D del ICOLCAP — amarillo punteado
 # ══════════════════════════════════════════════════════════
 def make_fig_bolsa(dff, x_range=None):
-    """
-    Un solo gráfico con las 3 versiones del índice colombiano
-    normalizadas a base 100 (Ene 2009) para comparar directamente.
-    """
     fig = go.Figure()
 
-    # ── ICOLCAP real base 100 (área sombreada debajo) ──
+    # ── ICOLCAP real base 100 ─────────────────────────────
     fig.add_trace(go.Scatter(
         x=dff["fecha"], y=dff["icolcap_base100"],
-        name="ICOLCAP real (base 100)",
+        name="ICOLCAP General",
         mode="lines", line=dict(color=C_BOLSA, width=2.5),
         fill="tozeroy", fillcolor="rgba(63,185,80,0.06)",
-        hovertemplate="<b>ICOLCAP:</b> %{y:.2f}<extra></extra>",
+        hovertemplate="<b>ICOLCAP General:</b> %{y:.2f}<extra></extra>",
     ))
 
-    # ── Índice Sintético — igual ponderación ──────────
+    # ── Índice Igual Ponderación ───────────────────────
     fig.add_trace(go.Scatter(
         x=dff["fecha"], y=dff["sintetico_base100"],
-        name="Índice Igual Ponderación (canasta oficial ICOLCAP)",
-        mode="lines", line=dict(color=C_SINTET, width=2.2),
-        hovertemplate="<b>Sintético:</b> %{y:.2f}<extra></extra>",
+        name="Índice Diversificado Colombia",
+        mode="lines", line=dict(color=C_SINTET, width=2.0), opacity=0.85,
+        hovertemplate="<b>Índice Diversificado:</b> %{y:.2f}<extra></extra>",
     ))
 
-    # ── Las 7 Grandes Colombia ─────────────────────────
+    # ── 7 Grandes Colombia ─────────────────────────────
     fig.add_trace(go.Scatter(
         x=dff["fecha"], y=dff["grandes_base100"],
-        name="Índice 7 Grandes Colombia",
-        mode="lines", line=dict(color=C_GRANDES, width=2.2),
-        hovertemplate="<b>7 Grandes:</b> %{y:.2f}<extra></extra>",
+        name="7 Magníficas Colombianas",
+        mode="lines", line=dict(color=C_GRANDES, width=2.0), opacity=0.85,
+        hovertemplate="<b>7 Magníficas:</b> %{y:.2f}<extra></extra>",
     ))
 
-    # Línea base 100
     fig.add_hline(y=100, line_dash="dot", line_color="#334155", line_width=1,
         annotation_text="  Base Ene 2009 = 100",
         annotation_font=dict(color="#475569", size=9),
         annotation_position="right")
 
     fig.update_layout(
-        **BASE_LAYOUT, height=320,
-        title=dict(
-            text="③ Bolsa Colombia — ICOLCAP · Índice Igual Ponderación · 7 Grandes  (base 100 = Ene 2009)",
-            font=dict(size=11, color="#94a3b8"), x=0),
+        **BASE_LAYOUT, height=355,
         xaxis=xaxis_base(x_range),
         yaxis=yaxis_base("Índice (base 100)"),
     )
@@ -252,70 +249,85 @@ def make_fig_bolsa(dff, x_range=None):
 # ══════════════════════════════════════════════════════════
 # 5D. PANEL INFLACIÓN + PIB
 # ══════════════════════════════════════════════════════════
+def _color_inf_mensual(v):
+    if pd.isna(v):  return "#475569"
+    if v >= 1.0:    return "#ef4444"   # rojo  — inflación muy alta
+    if v >= 0.6:    return "#f97316"   # naranja
+    if v >= 0.3:    return "#eab308"   # amarillo
+    return "#4ade80"                   # verde  — inflación baja / controlada
+
 def make_fig_inflacion(dff, x_range=None, show_layers=None):
-    """
-    show_layers: lista con los elementos a mostrar
-    Opciones: 'inf_mensual', 'inf_anual', 'pib'
-    """
     if show_layers is None:
         show_layers = ["inf_mensual", "inf_anual", "pib"]
 
     df_inf_m = agg_inflacion(dff)
-    dff_pib  = filter_window_pib(None)  # PIB siempre en rango completo, filtrado por x_range
+    dff_pib  = filter_window_pib(None)
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # ── Barras inflación mensual ──────────────────────────
+    # ── Zona meta BanRep 2–4 % (fondo sutil) ─────────────
+    if "inf_anual" in show_layers:
+        fig.add_hrect(
+            y0=2.0, y1=4.0,
+            fillcolor="rgba(74,222,128,0.05)", line_width=0, layer="below",
+        )
+
+    # ── Barras inflación mensual — escala de calor ────────
     if "inf_mensual" in show_layers:
-        prev_vals = df_inf_m["inflacion_mensual"].shift(1)
-        cb = [C_INF_BAJA if (v < p and pd.notna(p)) else C_INF_M
-              for v, p in zip(df_inf_m["inflacion_mensual"], prev_vals)]
+        cb = [_color_inf_mensual(v) for v in df_inf_m["inflacion_mensual"]]
         fig.add_trace(go.Bar(
             x=df_inf_m["fecha"], y=df_inf_m["inflacion_mensual"],
             name="Inflación mensual",
-            marker=dict(color=cb, opacity=0.80),
+            marker=dict(color=cb, opacity=0.75, line=dict(width=0)),
             hovertemplate="<b>Inflación mensual:</b> %{y:.2f}%<extra></extra>",
         ), secondary_y=False)
 
-    # ── Línea inflación anual ─────────────────────────────
+    # ── Área + línea inflación anual ──────────────────────
     if "inf_anual" in show_layers:
         fig.add_trace(go.Scatter(
             x=df_inf_m["fecha"], y=df_inf_m["inflacion_anual"],
+            mode="lines",
+            line=dict(color="rgba(244,63,94,0)", width=0),
+            fill="tozeroy", fillcolor="rgba(244,63,94,0.10)",
+            showlegend=False, hoverinfo="skip",
+        ), secondary_y=False)
+        fig.add_trace(go.Scatter(
+            x=df_inf_m["fecha"], y=df_inf_m["inflacion_anual"],
             name="Inflación anual 12M",
-            mode="lines", line=dict(color=C_INF_A, width=2.2),
+            mode="lines", line=dict(color="#f43f5e", width=2.5),
             hovertemplate="<b>Inflación anual 12M:</b> %{y:.2f}%<extra></extra>",
         ), secondary_y=False)
-        # Meta BanRep 3%
         fig.add_trace(go.Scatter(
             x=[df_inf_m["fecha"].min(), df_inf_m["fecha"].max()],
             y=[3.0, 3.0],
             name="Meta BanRep 3%",
-            mode="lines", line=dict(color="#94a3b8", width=1.5, dash="dot"),
+            mode="lines",
+            line=dict(color="rgba(148,163,184,0.55)", width=1.5, dash="dash"),
             hovertemplate="<b>Meta BanRep:</b> 3.00%<extra></extra>",
         ), secondary_y=False)
 
-    # ── PIB crecimiento YoY ───────────────────────────────
+    # ── PIB crecimiento YoY — barras semitransparentes ────
     if "pib" in show_layers:
-        # Filtrar PIB al mismo rango que dff
         dff_pib_f = dff_pib[
             (dff_pib["fecha"] >= dff["fecha"].min()) &
             (dff_pib["fecha"] <= dff["fecha"].max())
         ]
-        # Colorear barras: verde si > 0, rojo si < 0
-        colores_pib = [C_VERDE if v >= 0 else C_ROJO
-                       for v in dff_pib_f["pib_crecimiento_yoy"]]
+        colores_pib = [
+            "rgba(16,185,129,0.65)" if v >= 0 else "rgba(239,68,68,0.65)"
+            for v in dff_pib_f["pib_crecimiento_yoy"]
+        ]
         fig.add_trace(go.Bar(
             x=dff_pib_f["fecha"], y=dff_pib_f["pib_crecimiento_yoy"],
             name="PIB — Crecimiento anual (%)",
-            marker=dict(color=colores_pib, opacity=0.75),
+            marker=dict(color=colores_pib, line=dict(width=0)),
             hovertemplate=(
                 "<b>PIB Colombia:</b> %{y:.2f}% interanual<br>"
                 "<b>Trimestre:</b> %{customdata}<extra></extra>"
             ),
             customdata=dff_pib_f["trimestre"].values,
         ), secondary_y=True)
-        fig.add_hline(y=0, line_dash="solid", line_color="#334155", line_width=1,
-            row=1, col=1)
+        fig.add_hline(y=0, line_dash="solid",
+                      line_color="rgba(51,65,85,0.6)", line_width=1, row=1, col=1)
 
     fig.update_yaxes(
         title_text="Inflación (%)", ticksuffix="%",
@@ -323,23 +335,27 @@ def make_fig_inflacion(dff, x_range=None, show_layers=None):
         secondary_y=False,
     )
     fig.update_yaxes(
-        title_text="PIB crecimiento (%)", ticksuffix="%",
-        showgrid=False, zeroline=False, color=C_PIB,
+        title_text="", showticklabels=False,
+        showgrid=False, zeroline=False, showline=False,
         secondary_y=True,
     )
     fig.update_layout(
-        **BASE_LAYOUT, height=280,
-        title=dict(
-            text="④ Inflación Colombia (mensual · anual)  &  Crecimiento PIB",
-            font=dict(size=11, color="#94a3b8"), x=0),
+        **BASE_LAYOUT, height=320,
         xaxis=dict(**xaxis_base(x_range)),
         barmode="overlay",
     )
+    fig.update_layout(margin_r=15)
     return fig
 
 # ══════════════════════════════════════════════════════════
 # 5E. PANEL TES PESOS
 # ══════════════════════════════════════════════════════════
+_TES_FILL = {
+    "tes_pesos_1y":  "rgba(255,166,87,0.09)",
+    "tes_pesos_5y":  "rgba(56,189,248,0.09)",
+    "tes_pesos_10y": "rgba(188,140,255,0.09)",
+}
+
 def make_fig_tes(dff, active_tenors, x_range=None):
     fig = go.Figure()
     for key, col, color, label in [
@@ -348,17 +364,25 @@ def make_fig_tes(dff, active_tenors, x_range=None):
         ("10A", "tes_pesos_10y", C_TES10, "TES 10 años (largo plazo)"),
     ]:
         vis = True if key in active_tenors else "legendonly"
+        grp = f"tes_{key}"
+        # Área rellena (vinculada al grupo de leyenda)
         fig.add_trace(go.Scatter(
             x=dff["fecha"], y=dff[col],
-            name=label, visible=vis, mode="lines+markers",
-            line=dict(color=color, width=1.8),
-            marker=dict(size=4, color=color, opacity=0),
+            mode="lines", line=dict(color=color, width=0),
+            fill="tozeroy", fillcolor=_TES_FILL[col],
+            legendgroup=grp, showlegend=False, hoverinfo="skip",
+            visible=vis,
+        ))
+        # Línea principal
+        fig.add_trace(go.Scatter(
+            x=dff["fecha"], y=dff[col],
+            name=label, visible=vis, mode="lines",
+            line=dict(color=color, width=2.5),
+            legendgroup=grp,
             hovertemplate=f"<b>{label}:</b> %{{y:.2f}}%<extra></extra>",
         ))
     fig.update_layout(
-        **BASE_LAYOUT, height=270,
-        title=dict(text="② Tasas TES Pesos — Bonos Soberanos Colombia (% anual)",
-                   font=dict(size=11, color="#94a3b8"), x=0),
+        **BASE_LAYOUT, height=310,
         xaxis=xaxis_base(x_range),
         yaxis=yaxis_base("Tasa anual (%)", "%"),
     )
@@ -386,15 +410,15 @@ def make_curve_fig(row, active_tenors):
         text=[f"<b>{v:.2f}%</b>" for v in y_vals],
         textposition="top center", cliponaxis=False,
         textfont=dict(color="#fff", size=13),
-        line=dict(color=C_AZUL, width=3),
+        line=dict(color=C_AZUL, width=2.5),
         marker=dict(size=13, color=c_vals, line=dict(width=2, color="#fff")),
         hovertemplate="<b>%{x}:</b> %{y:.2f}%<extra></extra>",
         showlegend=False,
     ))
     fig.update_layout(
-        template="plotly_dark", paper_bgcolor=BG_PANEL, plot_bgcolor=BG_PANEL,
+        template="plotly_white", paper_bgcolor=BG_PANEL, plot_bgcolor=BG_PANEL,
         height=260, margin=dict(l=50, r=15, t=15, b=45),
-        hoverlabel=dict(bgcolor="#0f172a", font_size=12),
+        hoverlabel=dict(bgcolor="#ffffff", font_size=12),
         xaxis=dict(title="Plazo del bono", showgrid=False, color=TEXT, tickfont=dict(size=11)),
         yaxis=dict(title="Tasa (%)", range=[min(y_vals)-pad, max(y_vals)+pad],
                    showgrid=True, gridcolor=GRID_CLR, zeroline=False,
@@ -419,6 +443,7 @@ def metric_card(title, value, color, subtitle=""):
 # 8. LAYOUT
 # ══════════════════════════════════════════════════════════
 app = Dash(__name__, title="Dashboard Colombia", suppress_callback_exceptions=True)
+server = app.server  # WSGI expuesto para despliegue (gunicorn)
 
 # Todos los IDs de gráficos para el sistema de sincronización
 ALL_CHARTS = ["chart-inflacion","chart-tes","chart-bolsa"]
@@ -473,7 +498,13 @@ modal = html.Div(id="modal", children=[
         ], style={"marginBottom":"14px","background":BG_CARD,
                   "border":f"1px solid {BORDER}","borderRadius":"10px","padding":"12px"}),
         dcc.Graph(id="detail-chart",
-                  config={"displaylogo":False,"scrollZoom":True,"responsive":True}),
+                  config={
+    "displaylogo": False,
+    "scrollZoom": True,
+    "responsive": True,
+    "displayModeBar": "hover",
+    "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
+}),
         html.Div([
             html.Span("💡 Tip: ", style={"color":C_AZUL,"fontWeight":"700","fontSize":"11px"}),
             html.Span("Usa el rangeslider debajo del gráfico para precisar el período.",
@@ -493,131 +524,153 @@ app.layout = html.Div([
 
     # HEADER
     html.Div([
+        # Logos anclados a la izquierda con posición absoluta
         html.Div([
-            html.Div("Dashboard Financiero Colombia",
-                     style={"fontSize":"20px","fontWeight":"700","color":TEXT}),
-            html.Div("ICOLCAP · Índice Igual Ponderación · 7 Grandes · Inflación · PIB · TES Pesos  |  Ene 2009 – Abr 2026",
-                     style={"fontSize":"11px","color":MUTED,"marginTop":"3px"}),
-        ]),
-        html.Div([
-            html.Div("Período visible",
-                     style={"fontSize":"10px","color":MUTED,"marginBottom":"4px"}),
-            dcc.Dropdown(id="time-window",
-                options=[{"label":l,"value":v} for l,v in [
-                    ("3 meses","3M"),("6 meses","6M"),("1 año","1A"),
-                    ("3 años","3A"),("5 años","5A"),("Todo","ALL")]],
-                value="ALL", clearable=False,
-                style={"width":"140px","color":"#111"}),
-        ]),
-        html.Div([
-            html.Div("Panel ① — mostrar:",
-                     style={"fontSize":"10px","color":MUTED,"marginBottom":"4px"}),
-            dcc.Checklist(id="inf-layers",
-                options=[
-                    {"label":" Inflación mensual", "value":"inf_mensual"},
-                    {"label":" Inflación anual",   "value":"inf_anual"},
-                    {"label":" PIB",               "value":"pib"},
-                ],
-                value=["inf_mensual","inf_anual","pib"], inline=True,
-                inputStyle={"marginRight":"4px","marginLeft":"8px"},
-                labelStyle={"color":TEXT,"fontSize":"12px"}),
-        ]),
-        html.Div([
-            html.Div("TES visibles",
-                     style={"fontSize":"10px","color":MUTED,"marginBottom":"4px"}),
-            dcc.Checklist(id="curve-toggle",
-                options=[{"label":f" {l}","value":v} for l,v in
-                         [("1 Año","1A"),("5 Años","5A"),("10 Años","10A")]],
-                value=["1A","5A","10A"], inline=True,
-                inputStyle={"marginRight":"4px","marginLeft":"8px"},
-                labelStyle={"color":TEXT,"fontSize":"12px"}),
-        ]),
-        html.Button("🔍 Ver en Detalle", id="open-modal", style={
-            "background":C_AZUL,"color":"#0d1117","border":"none",
-            "borderRadius":"8px","padding":"9px 16px","fontSize":"13px",
-            "fontWeight":"700","cursor":"pointer",
+            html.Img(src="/assets/logo universisas.png",
+                     style={"height":"58px","objectFit":"contain"}),
+            html.Img(src="/assets/Logo Schema.png",
+                     style={"height":"58px","objectFit":"contain"}),
+        ], style={
+            "position":"absolute","left":"18px","top":"50%",
+            "transform":"translateY(-50%)",
+            "display":"flex","flexDirection":"row","alignItems":"center","gap":"10px",
         }),
+        # Título centrado en el ancho total
+        html.Div([
+            html.Div("ColombiaMacro",
+                     style={"fontSize":"36px","fontWeight":"900","color":TEXT,
+                            "letterSpacing":"1px","textAlign":"center"}),
+            html.Div("Dashboard de Indicadores Económicos y Bursátiles",
+                     style={"fontSize":"15px","color":MUTED,"textAlign":"center",
+                            "marginTop":"5px","letterSpacing":"0.3px"}),
+        ], style={"width":"100%"}),
     ], style={
-        "display":"flex","justifyContent":"space-between","alignItems":"flex-end",
-        "gap":"10px","background":BG_PANEL,"border":f"1px solid {BORDER}",
-        "borderRadius":"12px","padding":"12px 18px","marginBottom":"12px",
-        "flexWrap":"wrap",
+        "position":"relative",
+        "background":BG_PANEL,"border":f"1px solid {BORDER}",
+        "borderRadius":"12px","padding":"16px 18px","marginBottom":"12px",
+        "display":"flex","alignItems":"center","justifyContent":"center",
     }),
+
+    # Controles ocultos (necesarios para callbacks)
+    html.Div([
+        dcc.Dropdown(id="time-window",
+            options=[{"label":l,"value":v} for l,v in [
+                ("3 meses","3M"),("6 meses","6M"),("1 año","1A"),
+                ("3 años","3A"),("5 años","5A"),("Todo","ALL")]],
+            value="ALL", clearable=False),
+        dcc.Checklist(id="inf-layers",
+            options=[
+                {"label":"inf_mensual","value":"inf_mensual"},
+                {"label":"inf_anual",  "value":"inf_anual"},
+                {"label":"pib",        "value":"pib"},
+            ],
+            value=["inf_mensual","inf_anual","pib"]),
+        dcc.Checklist(id="curve-toggle",
+            options=[{"label":v,"value":v} for v in ["1A","5A","10A"]],
+            value=["1A","5A","10A"]),
+        html.Button("Ver en Detalle", id="open-modal", n_clicks=0),
+    ], style={"display":"none"}),
 
     # CUERPO
     html.Div([
 
         # ── PANEL IZQUIERDO ──────────────────────────────
         html.Div([
-            # Control de vinculación de zoom
-            html.Div([
-                html.Span("🔗 Vincular zoom: ",
-                          style={"fontSize":"11px","color":MUTED,"marginRight":"6px"}),
-                dcc.Checklist(id="sync-panels",
-                    options=[
-                        {"label":" ① Inflac/PIB", "value":"inflacion"},
-                        {"label":" ② TES",        "value":"tes"},
-                        {"label":" ③ Bolsa",      "value":"bolsa"},
-                    ],
-                    value=["bolsa","inflacion","tes"],
-                    inline=True,
-                    inputStyle={"marginRight":"3px","marginLeft":"8px"},
-                    labelStyle={"color":TEXT,"fontSize":"11px"},
-                ),
-            ], style={
-                "background":BG_CARD,"border":f"1px solid {BORDER}",
-                "borderRadius":"8px","padding":"7px 12px","marginBottom":"8px",
-                "display":"flex","alignItems":"center","flexWrap":"wrap",
-            }),
+            # sync-panels oculto (necesario para callbacks)
+            html.Div(dcc.Checklist(id="sync-panels",
+                options=[{"label":"","value":v} for v in ["inflacion","tes","bolsa"]],
+                value=[]), style={"display":"none"}),
 
             # Los 3 gráficos — orden: ① Inflación/PIB · ② TES · ③ Bolsa
+            html.Div([
+                html.Div("INFLACIÓN COLOMBIA & PIB",
+                         style={"fontSize":"19px","fontWeight":"900","color":TEXT,
+                                "textAlign":"center","letterSpacing":"1.5px"}),
+            ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
+                      "borderRadius":"8px","marginBottom":"3px"}),
             dcc.Graph(id="chart-inflacion", clear_on_unhover=False,
-                config={"displaylogo":False,"scrollZoom":True,"responsive":True},
-                style={"marginBottom":"6px"}),
-            dcc.Graph(id="chart-tes", clear_on_unhover=False,
-                config={"displaylogo":False,"scrollZoom":True,"responsive":True},
-                style={"marginBottom":"6px"}),
-            dcc.Graph(id="chart-bolsa", clear_on_unhover=False,
-                config={"displaylogo":False,"scrollZoom":True,"responsive":True}),
+                config={
+    "displaylogo": False,
+    "scrollZoom": True,
+    "responsive": True,
+    "displayModeBar": "hover",
+    "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
+},
+                style={"marginBottom":"4px"}),
 
-        ], style={"width":"64%","background":BG_PANEL,
+            html.Div([
+                html.Div("SEÑALES DE MERCADO COLOMBIANO",
+                         style={"fontSize":"19px","fontWeight":"900","color":TEXT,
+                                "textAlign":"center","letterSpacing":"1.5px"}),
+                html.Div("Tasas TES Pesos — Bonos Soberanos",
+                         style={"fontSize":"13px","color":MUTED,"textAlign":"center","marginTop":"3px"}),
+            ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
+                      "borderRadius":"8px","marginBottom":"3px"}),
+            dcc.Graph(id="chart-tes", clear_on_unhover=False,
+                config={
+    "displaylogo": False,
+    "scrollZoom": True,
+    "responsive": True,
+    "displayModeBar": "hover",
+    "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
+},
+                style={"marginBottom":"4px"}),
+
+            html.Div([
+                html.Div("EVOLUCIÓN DEL ICOLCAP",
+                         style={"fontSize":"19px","fontWeight":"900","color":TEXT,
+                                "textAlign":"center","letterSpacing":"1.5px"}),
+            ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
+                      "borderRadius":"8px","marginBottom":"3px"}),
+            dcc.Graph(id="chart-bolsa", clear_on_unhover=False,
+                config={
+    "displaylogo": False,
+    "scrollZoom": True,
+    "responsive": True,
+    "displayModeBar": "hover",
+    "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
+}),
+
+        ], style={"width":"72%","background":BG_PANEL,
                   "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"10px"}),
 
         # ── PANEL DERECHO ────────────────────────────────
         html.Div([
-            html.Div("Curva de Rendimientos TES",
-                     style={"fontSize":"14px","fontWeight":"700","color":TEXT,"marginBottom":"2px"}),
             html.Div([
-                html.Span("👁 Hover", style={"color":MUTED,"fontWeight":"700","fontSize":"10px"}),
-                html.Span(" explorar  ·  ", style={"color":MUTED,"fontSize":"10px"}),
-                html.Span("🖱 Clic", style={"color":C_AZUL,"fontWeight":"700","fontSize":"10px"}),
-                html.Span(" fijar valores", style={"color":MUTED,"fontSize":"10px"}),
-            ], style={"marginBottom":"4px"}),
+                html.Div("CURVA DE RENDIMIENTOS TES",
+                         style={"fontSize":"19px","fontWeight":"900","color":TEXT,
+                                "textAlign":"center","letterSpacing":"1.5px"}),
+                html.Div("Tasas soberanas · hover para explorar · clic para fijar",
+                         style={"fontSize":"11px","color":MUTED,"textAlign":"center"}),
+            ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
+                      "borderRadius":"8px","marginBottom":"8px"}),
+
+            # Controles ocultos necesarios para callbacks
             html.Div([
-                html.Button("✕ Soltar fecha fijada", id="btn-soltar", n_clicks=0,
-                    style={"background":"none","border":f"1px solid {BORDER}",
-                           "color":MUTED,"cursor":"pointer","borderRadius":"5px",
-                           "padding":"2px 8px","fontSize":"10px"}),
-            ], style={"marginBottom":"6px"}),
-            html.Div(id="fecha-activa",
-                     style={"fontSize":"12px","fontWeight":"600","marginBottom":"8px",
-                            "padding":"5px 10px","borderRadius":"8px",
-                            "background":BG_CARD,"border":f"1px solid {BORDER}"}),
+                html.Button("", id="btn-soltar", n_clicks=0),
+                html.Div(id="fecha-activa"),
+            ], style={"display":"none"}),
 
             # Leyenda TES
             html.Div([
-                *[html.Div([
-                    html.Span("━━", style={"color":c,"marginRight":"6px","fontWeight":"900"}),
-                    html.Span(lbl, style={"fontSize":"10px","color":MUTED}),
-                ], style={"marginBottom":"3px"}) for c, lbl in [
-                    (C_TES1, "TES 1A — bono corto plazo"),
-                    (C_TES5, "TES 5A — bono medio plazo"),
-                    (C_TES10,"TES 10A — bono largo plazo"),
+                *[html.Span([
+                    html.Span("━━", style={"color":c,"marginRight":"4px","fontWeight":"900"}),
+                    html.Span(lbl, style={"fontSize":"9px","color":MUTED}),
+                ], style={"marginRight":"12px","whiteSpace":"nowrap"}) for c, lbl in [
+                    (C_TES1, "TES 1A"),
+                    (C_TES5, "TES 5A"),
+                    (C_TES10,"TES 10A"),
                 ]],
-            ], style={"marginBottom":"8px"}),
+            ], style={"display":"flex","flexDirection":"row","alignItems":"center",
+                      "marginBottom":"8px","flexWrap":"nowrap"}),
 
             dcc.Graph(id="curve-chart",
-                config={"displaylogo":False,"responsive":True},
+                config={
+                    "displaylogo": False,
+                    "responsive": True,
+                    "displayModeBar": "hover",
+                    "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
+                },
                 style={"height":"260px"}),
 
             html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
@@ -628,26 +681,7 @@ app.layout = html.Div([
 
             html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
 
-            # Guía
-            html.Div([
-                html.Div("Guía de lectura:",
-                         style={"fontSize":"11px","color":C_AZUL,"fontWeight":"700","marginBottom":"8px"}),
-                *[html.Div([
-                    html.Span(t, style={"fontSize":"10px","color":c,
-                              "fontWeight":"700","display":"block","marginBottom":"2px"}),
-                    html.Div(d, style={"fontSize":"10px","color":MUTED}),
-                ], style={"marginBottom":"7px"}) for t, c, d in [
-                    ("③ Bolsa — 3 líneas en un panel", C_BOLSA,
-                     "Verde = ICOLCAP oficial. Celeste = Índice Igual Ponderación (canasta oficial BVC, ~17-23 empresas según el período). Amarillo = Índice 7 Grandes. Base 100 = Ene 2009."),
-                    ("① Inflación (naranja/rojo) + PIB (violeta)", C_PIB,
-                     "Barras naranja=sube / verde=baja. Línea roja=inflación acumulada 12M. Barras violeta=crecimiento PIB trimestral. Toggle en el header para mostrar/ocultar."),
-                    ("② TES Pesos", C_TES5,
-                     "Tasas soberanas 1A · 5A · 10A. Cuando suben anticipan inflación o riesgo. Se mueven antes que el BanRep actúe."),
-                ]],
-            ], style={"background":BG_CARD,"border":f"1px solid {BORDER}",
-                      "borderRadius":"10px","padding":"12px","flexGrow":"1"}),
-
-        ], style={"width":"36%","background":BG_PANEL,
+        ], style={"width":"28%","background":BG_PANEL,
                   "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"14px",
                   "display":"flex","flexDirection":"column",
                   "overflowY":"auto","maxHeight":"1060px"}),
@@ -708,7 +742,7 @@ def sync_zoom(*args):
     Input("sync-panels","value"),
 )
 def upd_bolsa(window, xrd, synced):
-    if ctx.triggered_id == "xrange-store" and "bolsa" not in (synced or []):
+    if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "bolsa" not in (synced or []):
         return no_update
     dff = filter_window(df_daily, window)
     xr  = (xrd or {}).get("range") if "bolsa" in (synced or []) else None
@@ -722,7 +756,7 @@ def upd_bolsa(window, xrd, synced):
     Input("inf-layers","value"),
 )
 def upd_inflacion(window, xrd, synced, layers):
-    if ctx.triggered_id == "xrange-store" and "inflacion" not in (synced or []):
+    if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "inflacion" not in (synced or []):
         return no_update
     dff = filter_window(df_daily, window)
     xr  = (xrd or {}).get("range") if "inflacion" in (synced or []) else None
@@ -736,7 +770,7 @@ def upd_inflacion(window, xrd, synced, layers):
     Input("curve-toggle","value"),
 )
 def upd_tes(window, xrd, synced, active_tenors):
-    if ctx.triggered_id == "xrange-store" and "tes" not in (synced or []):
+    if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "tes" not in (synced or []):
         return no_update
     dff = filter_window(df_daily, window)
     xr  = (xrd or {}).get("range") if "tes" in (synced or []) else None
