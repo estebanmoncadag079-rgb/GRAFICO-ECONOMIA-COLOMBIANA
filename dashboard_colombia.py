@@ -1,7 +1,7 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
 ║   DASHBOARD FINANCIERO COLOMBIA — v8.0                          ║
-║   Panel ① COLCAP oficial y comparaciones historicas            ║
+║   Panel ① COLCAP oficial y canastas historicas                 ║
 ║   Panel ② Inflación + PIB (toggle)                              ║
 ║   Panel ③ TES Pesos 1A · 5A · 10A                               ║
 ╠══════════════════════════════════════════════════════════════════╣
@@ -248,7 +248,7 @@ def analysis_figure(fig, height=420, period_axis=False):
 # ══════════════════════════════════════════════════════════
 def make_fig_bolsa(dff, x_range=None, layers=None):
     if layers is None:
-        layers = ["oficial", "referencia", "equiponderado", "grandes"]
+        layers = ["oficial", "equiponderado", "grandes"]
     fig = go.Figure()
 
     if "oficial" in layers:
@@ -262,7 +262,6 @@ def make_fig_bolsa(dff, x_range=None, layers=None):
 
     legacy = df_indices[df_indices["fecha"].between(dff["fecha"].min(), dff["fecha"].max())]
     legacy_series = [
-        ("referencia", "icolcap_base100", "ICOLCAP empalmado · legado", "#8b5cf6"),
         ("equiponderado", "sintetico_base100", "Índice equiponderado · legado", C_SINTET),
         ("grandes", "grandes_base100", "7 Magníficas · legado", C_GRANDES),
     ]
@@ -476,7 +475,6 @@ def make_curve_fig(row, active_tenors):
 # ══════════════════════════════════════════════════════════
 LABEL_HELP = {
     "COLCAP oficial": "Índice accionario publicado por BanRep. Hasta el 27 de mayo de 2021 seguía la metodología BVC; desde el 28 de mayo, la de MSCI. La transición conservó los niveles históricos, no la misma composición ni los mismos pesos. Aquí se expresa en base 100 al 9 de febrero de 2009.",
-    "ICOLCAP empalmado": "Serie historica de referencia enlazada con retornos del valor neto de los activos (NAV) del fondo ICOLCAP. Es una reconstruccion bajo revision, no la serie oficial COLCAP ni una cartera fija de empresas.",
     "Índice equiponderado": "Promedio de los retornos mensuales de las acciones disponibles de la canasta historica. Cada accion valida pesa igual; las que no tienen datos se excluyen ese mes. La composicion varia. La curva diaria es una reconstruccion, no precios diarios observados.",
     "7 Magníficas": "Canasta de este proyecto: Ecopetrol (ECOPETROL), Bancolombia preferencial (PFBCOLOM), Grupo Sura (GRUPOSURA), Grupo Argos (GRUPOARGOS), Grupo Aval preferencial (PFAVAL), ISA (ISA) y Nutresa (NUTRESA). Son nombres y tickers historicos. Igual peso entre las acciones elegibles con datos: algunos meses participan menos de siete. No es un indice oficial.",
     "Inflación mensual": "Variacion del indice de precios al consumidor (IPC) frente al mes anterior. Barras naranjas; se lee en el eje derecho. Por ejemplo, 0,5% significa que la canasta de consumo subio 0,5% en ese mes.",
@@ -801,15 +799,14 @@ app.layout = html.Div([
             chart_description("Bolsa colombiana: mercado y canastas",
                 "El COLCAP oficial procede de BanRep. El 28 de mayo de 2021 pasó de la metodología BVC a la de MSCI: "
                 "conservó su nivel histórico, pero cambió cómo se seleccionan y ponderan las acciones. "
-                "Las otras líneas son comparaciones heredadas bajo revisión: ICOLCAP empalmado y dos canastas propias "
+                "Las líneas punteadas son dos canastas propias heredadas bajo revisión, "
                 "calculadas con retornos mensuales. Sus puntos diarios no son precios observados. "
                 "Todas las curvas se expresan en base 100 al 9 de febrero de 2009."),
             dcc.Checklist(id="bolsa-layers", options=[
                 {"label":help_label("COLCAP oficial"), "value":"oficial"},
-                {"label":help_label("ICOLCAP empalmado"), "value":"referencia"},
                 {"label":help_label("Índice equiponderado"), "value":"equiponderado"},
                 {"label":help_label("7 Magníficas"), "value":"grandes"},
-            ], value=["oficial", "referencia", "equiponderado", "grandes"],
+            ], value=["oficial", "equiponderado", "grandes"],
                 inline=True, className="bolsa-layers",
                 style={"fontSize":"12px","color":TEXT,"padding":"8px 4px",
                        "background":BG_PANEL,"border":f"1px solid {BORDER}",

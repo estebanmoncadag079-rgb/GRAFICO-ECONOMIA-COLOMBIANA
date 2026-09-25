@@ -43,7 +43,7 @@ comparacion bursatil original junto a la nueva serie oficial.
   propias, con cobertura, numero de precios validos y alertas. No inventa
   precios diarios.
 - `dashboard_colombia.py`: grafico macro con frecuencias diferenciadas,
-  grafico TES, grafico bursatil de cuatro lineas, estado de fuentes,
+  grafico TES, grafico bursatil de tres lineas, estado de fuentes,
   selectores y diseno responsive.
 - `validar_datos.py`, `estado_fuentes.csv`, `alertas_datos.csv`: controles de
   formulas, fechas, rangos, cobertura, rezagos y anomalias.
@@ -58,10 +58,9 @@ comparacion bursatil original junto a la nueva serie oficial.
 
 1. Verde continua: COLCAP publicado por BanRep, fuente BVC/MSCI segun
    periodo. Es la unica linea del grafico tratada como indice oficial.
-2. Morada punteada: referencia historica local que usa
-   `icolcap_referencia.csv` y, tras el 2026-04-01, se prolonga con retornos
-   del NAV/precio de un fondo en `datos_colombia_clean.csv`. Es un empalme
-   heredado, NO otra serie oficial del COLCAP. Se conserva para auditar.
+2. (Retirada el 2026-09-25) La morada punteada "ICOLCAP empalmado" se
+   elimino del grafico por pedido del usuario: `icolcap_referencia.csv`
+   parece estar en dolares y se empalmaba con retornos en pesos.
 3. Azul punteada: indice equiponderado propio. Promedia retornos mensuales
    entre acciones de la canasta con precio en ambos meses y luego la
    construccion antigua dibujo puntos diarios siguiendo la forma del indice
@@ -75,7 +74,7 @@ comparacion bursatil original junto a la nueva serie oficial.
    por DANE. Sus puntos diarios tambien son sintesis visual de retornos
    mensuales, no observaciones diarias de la canasta.
 
-Las cuatro curvas parten de una base 100 el 2009-02-09, pero eso no iguala
+Las tres curvas parten de una base 100 el 2009-02-09, pero eso no iguala
 sus fuentes ni metodologias. El selector deja ocultar o mostrar cada una.
 No volver a retirar la azul o la amarilla sin discutirlo con el usuario.
 
