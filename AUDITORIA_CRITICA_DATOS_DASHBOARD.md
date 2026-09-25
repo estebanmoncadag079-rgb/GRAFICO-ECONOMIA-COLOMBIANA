@@ -3,8 +3,9 @@
 Nota de seguimiento (2026-09-24): este documento registra el diagnostico de
 la version anterior. La rama `codex/datos-economia-colombiana` sustituyo el
 PIB nominal mal etiquetado por PIB real DANE, la serie bursatil empalmada por
-COLCAP oficial BanRep, y retiro las canastas reconstruidas de la visual
-diaria. El estado vigente de columnas, formulas y limites esta en
+COLCAP oficial BanRep para la linea y tarjeta oficiales. Las canastas
+reconstruidas permanecen como comparaciones historicas punteadas, con
+advertencias visibles de metodologia y cobertura. El estado vigente esta en
 `DATA_DICTIONARY.md`.
 
 Fecha de auditoria: 2026-09-24

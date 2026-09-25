@@ -1,12 +1,13 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
 ║   DASHBOARD FINANCIERO COLOMBIA — v8.0                          ║
-║   Panel ① COLCAP oficial publicado por BanRep                  ║
+║   Panel ① COLCAP oficial y comparaciones historicas            ║
 ║   Panel ② Inflación + PIB (toggle)                              ║
 ║   Panel ③ TES Pesos 1A · 5A · 10A                               ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Archivos requeridos (misma carpeta):                           ║
 ║    • colcap_oficial.csv                                         ║
+║    • indices_colombia.csv                                      ║
 ║    • tasas_interes_clean.csv                                     ║
 ║    • inflacion_clean.csv                                        ║
 ║    • pib_colombia.csv                                           ║
@@ -28,20 +29,27 @@ from validar_datos import isolated_tes_spikes
 # ══════════════════════════════════════════════════════════
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
 CSV_COLCAP  = os.path.join(BASE_DIR, "colcap_oficial.csv")
+CSV_INDICES = os.path.join(BASE_DIR, "indices_colombia.csv")
 CSV_TES     = os.path.join(BASE_DIR, "tasas_interes_clean.csv")
 CSV_INF     = os.path.join(BASE_DIR, "inflacion_clean.csv")
 CSV_PIB     = os.path.join(BASE_DIR, "pib_colombia.csv")
 CSV_ESTADO  = os.path.join(BASE_DIR, "estado_fuentes.csv")
+CSV_EXP     = os.path.join(BASE_DIR, "indices_experimentales_mensuales.csv")
 
 # ══════════════════════════════════════════════════════════
 # 1. CARGA Y PREPARACIÓN
 # ══════════════════════════════════════════════════════════
 df_colcap  = pd.read_csv(CSV_COLCAP,  parse_dates=["fecha"])
+df_indices = pd.read_csv(CSV_INDICES, parse_dates=["fecha"])
 df_tes     = pd.read_csv(CSV_TES,     parse_dates=["fecha"])
 df_inf     = pd.read_csv(CSV_INF,     parse_dates=["fecha"])
 
 df_pib  = pd.read_csv(CSV_PIB, parse_dates=["fecha"])
 df_estado = pd.read_csv(CSV_ESTADO)
+df_exp = pd.read_csv(CSV_EXP, parse_dates=["fecha"])
+last_reviewable_month = df_exp.loc[df_exp["estado"] == "revisable", "fecha"].max()
+last_reviewable_label = (last_reviewable_month.strftime("%Y-%m")
+                         if pd.notna(last_reviewable_month) else "sin mes revisable")
 
 # Merge diario principal
 for _df in [df_colcap, df_tes]:
@@ -195,18 +203,34 @@ def yaxis_base(title, suffix=""):
                 ticksuffix=suffix, **SPIKE_CFG)
 
 # ══════════════════════════════════════════════════════════
-# 5A. COLCAP OFICIAL
+# 5A. COLCAP OFICIAL Y SERIES HEREDADAS BAJO REVISION
 # ══════════════════════════════════════════════════════════
-def make_fig_bolsa(dff, x_range=None):
+def make_fig_bolsa(dff, x_range=None, layers=None):
+    if layers is None:
+        layers = ["oficial", "referencia", "equiponderado", "grandes"]
     fig = go.Figure()
 
-    # COLCAP publicado por BanRep, normalizado sobre 2009-02-09.
-    fig.add_trace(go.Scatter(
-        x=dff["fecha"], y=dff["colcap_base100"],
-        name="COLCAP oficial · base 100",
-        mode="lines", line=dict(color=C_BOLSA, width=2.5),
-        hovertemplate="<b>COLCAP:</b> %{y:.2f} (base 100)<extra></extra>",
-    ))
+    if "oficial" in layers:
+        fig.add_trace(go.Scatter(
+            x=dff["fecha"], y=dff["colcap_base100"],
+            name="COLCAP oficial",
+            mode="lines", line=dict(color=C_BOLSA, width=2.5),
+            hovertemplate="COLCAP oficial %{x|%d %b %Y}: %{y:.2f} (base 100)<extra></extra>",
+        ))
+
+    legacy = df_indices[df_indices["fecha"].between(dff["fecha"].min(), dff["fecha"].max())]
+    legacy_series = [
+        ("referencia", "icolcap_base100", "ICOLCAP empalmado · legado", "#8b5cf6"),
+        ("equiponderado", "sintetico_base100", "Índice equiponderado · legado", C_SINTET),
+        ("grandes", "grandes_base100", "7 Magníficas · legado", C_GRANDES),
+    ]
+    for key, column, label, color in legacy_series:
+        if key in layers:
+            fig.add_trace(go.Scatter(
+                x=legacy["fecha"], y=legacy[column], name=label,
+                mode="lines", line=dict(color=color, width=1.8, dash="dash"),
+                hovertemplate=f"{label} %{{x|%d %b %Y}}: %{{y:.2f}} (base 100)<extra></extra>",
+            ))
 
     fig.add_hline(y=100, line_dash="dot", line_color="#334155", line_width=1,
         annotation_text="  Base 09 feb 2009 = 100",
@@ -214,7 +238,7 @@ def make_fig_bolsa(dff, x_range=None):
         annotation_position="right")
 
     fig.update_layout(
-        **BASE_LAYOUT, height=355,
+        **{**BASE_LAYOUT, "margin": dict(l=60, r=65, t=10, b=90)}, height=420,
         xaxis=xaxis_base(x_range),
         yaxis=yaxis_base("Índice (base 100)"),
     )
@@ -409,7 +433,7 @@ modal = html.Div(id="modal", children=[
                      style={"fontSize":"11px","color":MUTED,"marginBottom":"6px"}),
             dcc.RadioItems(id="detail-var",
                 options=[
-                    {"label":" COLCAP oficial", "value":"bolsa"},
+                    {"label":" COLCAP y canastas", "value":"bolsa"},
                     {"label":" Inflación (mensual + anual)",    "value":"inflacion"},
                     {"label":" PIB real DANE",                  "value":"pib"},
                     {"label":" Inflación + PIB (comparación)",  "value":"inf_pib"},
@@ -583,11 +607,20 @@ app.layout = html.Div([
                 style={"marginBottom":"4px"}),
 
             html.Div([
-                html.Div("COLCAP OFICIAL · MERCADO ACCIONARIO",
+                html.Div("COLCAP Y CANASTAS COLOMBIANAS",
                          style={"fontSize":"19px","fontWeight":"900","color":TEXT,
                                 "textAlign":"center","letterSpacing":"1.5px"}),
             ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
                       "borderRadius":"8px","marginBottom":"3px"}),
+            dcc.Checklist(id="bolsa-layers", options=[
+                {"label":"COLCAP oficial", "value":"oficial"},
+                {"label":"ICOLCAP empalmado", "value":"referencia"},
+                {"label":"Índice equiponderado", "value":"equiponderado"},
+                {"label":"7 Magníficas", "value":"grandes"},
+            ], value=["oficial", "referencia", "equiponderado", "grandes"],
+                inline=True, className="bolsa-layers",
+                style={"fontSize":"12px","color":TEXT,"padding":"8px 4px"},
+                inputStyle={"marginRight":"4px","marginLeft":"12px"}),
             dcc.Graph(id="chart-bolsa", clear_on_unhover=False,
                 config={
     "displaylogo": False,
@@ -596,6 +629,14 @@ app.layout = html.Div([
     "displayModeBar": "hover",
     "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
 }),
+            html.Div(
+                "Líneas punteadas: reconstrucciones históricas bajo revisión. "
+                "La azul promedia retornos mensuales con igual peso entre acciones disponibles; "
+                "no cuenta avances menos descensos. La amarilla usa un subconjunto fijo de tickers, "
+                "pero puede tener menos de siete precios válidos. Ambas curvas distribuyen el retorno "
+                "mensual visualmente a días, no son observaciones diarias. "
+                f"Último mes con cobertura suficiente: {last_reviewable_label}.",
+                style={"fontSize":"11px","color":MUTED,"padding":"0 12px 8px"}),
 
         ], className="dashboard-main", style={"width":"72%","background":BG_PANEL,
                   "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"10px"}),
@@ -706,13 +747,14 @@ def sync_zoom(*args):
     Input("time-window","value"),
     Input("xrange-store","data"),
     Input("sync-panels","value"),
+    Input("bolsa-layers","value"),
 )
-def upd_bolsa(window, xrd, synced):
+def upd_bolsa(window, xrd, synced, layers):
     if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "bolsa" not in (synced or []):
         return no_update
     dff = filter_window(df_colcap, window)
     xr  = (xrd or {}).get("range") if "bolsa" in (synced or []) else None
-    return make_fig_bolsa(dff, xr)
+    return make_fig_bolsa(dff, xr, layers)
 
 @app.callback(
     Output("chart-inflacion","figure"),
@@ -863,11 +905,12 @@ def set_detail_window(*args):
     Input("detail-window","data"),
     Input("curve-toggle","value"),
     Input("inf-layers","value"),
+    Input("bolsa-layers","value"),
 )
-def update_detail(variable, window, active_tenors, layers):
+def update_detail(variable, window, active_tenors, layers, bolsa_layers):
     dff = filter_window(df_daily, window or "1A")
     if variable == "bolsa":
-        return make_fig_bolsa(filter_window(df_colcap, window or "1A"))
+        return make_fig_bolsa(filter_window(df_colcap, window or "1A"), layers=bolsa_layers)
     elif variable == "inflacion":
         return make_fig_inflacion(dff, show_layers=["inf_mensual","inf_anual"])
     elif variable == "pib":

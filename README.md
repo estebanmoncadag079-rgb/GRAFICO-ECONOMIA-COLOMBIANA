@@ -3,6 +3,8 @@
 Proyecto en Python/Dash para visualizar indicadores economicos y financieros de Colombia:
 
 - COLCAP oficial diario en puntos y base 100.
+- Comparacion con el indice equiponderado y las "7 Magnificas" heredados,
+  rotulados como reconstrucciones sinteticas bajo revision.
 - Inflacion mensual y anual.
 - Crecimiento real trimestral del PIB DANE.
 - Curva y series historicas de TES en pesos.
@@ -49,6 +51,7 @@ http://127.0.0.1:8050
 | Archivo | Descripcion |
 | --- | --- |
 | `colcap_oficial.csv` | COLCAP publicado por BanRep, en puntos y base 100. |
+| `indices_colombia.csv` | Curvas historicas heredadas, visibles como comparacion bajo revision. |
 | `tasas_interes_clean.csv` | Series TES pesos y UVR. |
 | `inflacion_clean.csv` | Variaciones IPC mensuales y anuales con procedencia por fila. |
 | `pib_colombia.csv` | PIB real y nominal trimestral, con formulas separadas. |

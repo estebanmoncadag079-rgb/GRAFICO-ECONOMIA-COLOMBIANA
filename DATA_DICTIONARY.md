@@ -10,7 +10,8 @@ dato se conocio. Cada archivo mantiene su frecuencia propia.
 | `inflacion_clean.csv` | Un mes, fechado al primer dia | [DANE, IPC](https://www.dane.gov.co/index.php/estadisticas-por-tema/precios-y-costos/indice-de-precios-al-consumidor-ipc/ipc-informacion-tecnica) y BanRep, serie 15000 | Inflacion |
 | `tasas_interes_clean.csv` | Dia de observacion | BanRep, series 15272 a 15277 | Curva cero cupon TES |
 | `colcap_oficial.csv` | Dia de mercado | [BanRep/BVC, indice COLCAP](https://suameca.banrep.gov.co/estadisticas-economicas/informacionSerie/2500/indice_mercado_accionario_colcap), serie 6 | Mercado accionario oficial |
-| `indices_experimentales_mensuales.csv` | Mes, fechado al primer dia | Precios locales y canasta historica local | Auditoria de canastas propias, fuera del grafico principal |
+| `indices_experimentales_mensuales.csv` | Mes, fechado al primer dia | Precios locales y canasta historica local | Auditoria y cobertura de las canastas propias |
+| `indices_colombia.csv` | Dia sintetico historico | Construccion heredada con precios mensuales y empalme NAV | Lineas comparativas punteadas, no datos oficiales diarios |
 | `estado_fuentes.csv` | Una fila por fuente | `validar_datos.py` | Fecha y estado de las fuentes |
 | `alertas_datos.csv` | Una alerta por observacion | `validar_datos.py` | Valores TES aislados bajo revision |
 
@@ -73,9 +74,11 @@ tuvo cambios metodologicos historicos: se debe revisar la continuidad al
 interpretar periodos largos. Se refresca la historia completa para captar
 correcciones de la fuente.
 
-La antigua `indices_colombia.csv` empalmaba `icolcap_referencia.csv` con
+La tabla heredada `indices_colombia.csv` empalma `icolcap_referencia.csv` con
 retornos de BlackRock. La antigua `datos_colombia_clean.csv` salta de escala
 el 2011-07-06. Ninguna se usa para la linea o tarjeta oficial.
+La linea empalmada permanece visible como comparacion diagnostica punteada;
+no se interpreta como una segunda serie oficial del COLCAP.
 
 ## Canastas experimentales
 
@@ -96,12 +99,28 @@ replica el COLCAP ni comparar rentabilidad total con el indice de precios.
 El archivo de precios legado conserva filas futuras vacias que el constructor
 excluye por fecha y cobertura.
 
+El grafico conserva las dos curvas sinteticas originales. La azul representa
+un indice de retornos mensuales equiponderados entre los componentes con
+precio disponible en ambos meses; no es el indicador clasico de numero de
+acciones al alza menos numero de acciones a la baja. La amarilla, llamada
+"7 Magnificas", usa la interseccion de una lista fija de siete tickers con
+la canasta y los precios disponibles: el numero efectivo puede ser menor.
+`indices_colombia.csv` distribuyo esos retornos mensuales a fechas diarias
+siguiendo la forma del indice empalmado (o linealmente en saltos), por lo
+que sus puntos intramensuales son una visualizacion sintetica. Esa tabla
+heredada no se sobreescribe en el actualizador diario; la tabla mensual
+experimental muestra la cobertura que debe revisarse antes de atribuir
+significado a un tramo.
+La canasta de "7 Magnificas" es una hipotesis de liderazgo bursatil elegida
+en el proyecto, no una medida de contribucion empresarial al PIB del DANE.
+
 ## Interpretacion temporal
 
 - El grafico macro conserva puntos mensuales y barras trimestrales en filas
   separadas. No convierte PIB o IPC a datos diarios.
-- El grafico TES usa solo fechas publicadas por BanRep. El grafico bursatil
-  usa solo fechas publicadas de COLCAP. Una fuente rezagada no recorta otra.
+- El grafico TES usa solo fechas publicadas por BanRep. La linea bursatil
+  oficial usa fechas publicadas de COLCAP; las tres lineas punteadas son
+  reconstrucciones historicas separadas. Una fuente rezagada no recorta otra.
 - Las tarjetas muestran la ultima observacion del periodo seleccionado y
   su propia fecha. Las cifras historicas usan la vintage actual; no son una
   base de datos de lo que se sabia exactamente en cada fecha pasada.
