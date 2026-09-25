@@ -2,6 +2,135 @@
   box-sizing: border-box;
 }
 
+.panel-explainer {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 10px 0 22px;
+  padding: 18px 20px;
+  border: 1px solid var(--description-border, #b8c9cf);
+  border-left: 4px solid var(--description-accent, #0f766e);
+  border-radius: 6px;
+  background: var(--description-background, #ffffff);
+  color: #25343b;
+  font-size: 15px;
+  line-height: 1.65;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel-explainer--market {
+  --description-background: #edf8f1;
+  --description-border: #b9dcc5;
+  --description-accent: #279354;
+}
+
+.panel-explainer--macro {
+  --description-background: #fff3ef;
+  --description-border: #f2c9bd;
+  --description-accent: #d36e58;
+}
+
+.panel-explainer--rates {
+  --description-background: #edf6fa;
+  --description-border: #bbd6e3;
+  --description-accent: #3985a3;
+}
+
+.panel-explainer--curve {
+  --description-background: #eef7f4;
+  --description-border: #badbd1;
+  --description-accent: #258675;
+}
+
+.panel-explainer p {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.help-label {
+  cursor: help;
+  text-decoration: underline dotted #64748b;
+  text-underline-offset: 4px;
+}
+
+.chart-readout {
+  min-height: 116px;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #25343b;
+  font: 13px/1.4 Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout-date { margin-bottom: 8px; font-weight: 600; }
+.readout-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.readout-series { min-width: 0; display: flex; flex-direction: column; }
+.readout-label { display: flex; align-items: center; gap: 6px; font-size: 12px; min-height: 34px; }
+.readout-swatch { width: 20px; flex: 0 0 20px; border-top: 3px solid; }
+.readout-value { font-size: 17px; line-height: 1.5; }
+.readout-period { font-size: 11px; color: #475569; min-height: 32px; }
+.readout-empty { padding: 20px 0; color: #475569; }
+
+@media (max-width: 640px) {
+  .readout-values { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+  .chart-readout { min-height: 230px; padding: 10px 8px; }
+  .readout-value { font-size: 15px; }
+}
+
+.help-label:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: 3px;
+}
+
+.chart-label-help {
+  position: fixed;
+  z-index: 10000;
+  box-sizing: border-box;
+  width: 350px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #17212b;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  font: 15px/1.6 Arial, sans-serif;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.story-steps {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.asset-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .story-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
 @media (max-width: 860px) {
   .dashboard-header {
     flex-direction: column !important;
@@ -28,6 +157,46 @@
 
   .header-title > div:nth-child(2) {
     font-size: 12px !important;
+  }
+
+  .story-hero {
+    flex-direction: column !important;
+    padding: 12px !important;
+    overflow: hidden;
+  }
+
+  .story-intro-text {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .story-intro-text > div:nth-child(2) {
+    font-size: 21px !important;
+  }
+
+  .story-badges {
+    flex-direction: column !important;
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .story-steps {
+    grid-template-columns: 1fr !important;
+  }
+
+  .story-step,
+  .story-badge,
+  .panel-explainer,
+  .chart-local-controls {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .chart-local-controls label,
+  .bolsa-layers label {
+    display: inline-flex !important;
+    align-items: center;
+    margin-bottom: 6px;
   }
 
   .dashboard-body {

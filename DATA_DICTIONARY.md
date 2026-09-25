@@ -70,9 +70,13 @@ economico y la fuente deben investigarse antes de corregir la tabla.
 `colcap_puntos` es el nivel publicado por BanRep (fuente original BVC).
 `colcap_base100 = 100 * colcap_puntos / colcap_puntos(2009-02-09)`.
 La tarjeta muestra puntos, la linea muestra la serie normalizada. El indice
-tuvo cambios metodologicos historicos: se debe revisar la continuidad al
-interpretar periodos largos. Se refresca la historia completa para captar
-correcciones de la fuente.
+paso de la metodologia BVC a la de MSCI COLCAP el 2021-05-28. MSCI tomo como
+inicio el ultimo nivel BVC del 2021-05-27 y conservo la historia previa: la
+continuidad numerica no implica una canasta o ponderaciones constantes. El
+grafico senala esta fecha cuando esta dentro del periodo visible. Se refresca
+la historia completa para captar correcciones de la fuente.
+La transicion y la continuidad de niveles estan documentadas en la
+[metodologia MSCI COLCAP de mayo de 2021](https://www.msci.com/eqb/methodology/meth_docs/MSCI_COLCAP_Index_Methodology_May2021.pdf).
 
 La tabla heredada `indices_colombia.csv` empalma `icolcap_referencia.csv` con
 retornos de BlackRock. La antigua `datos_colombia_clean.csv` salta de escala
