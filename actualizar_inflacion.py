@@ -15,8 +15,17 @@ Uso:
 """
 
 import os, sys, argparse, datetime
+import io
+import re
+from pathlib import Path
+from urllib.parse import urljoin
 import requests
 import pandas as pd
+import truststore
+from bs4 import BeautifulSoup
+from openpyxl import load_workbook
+
+truststore.inject_into_ssl()
 
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
 CSV_INF   = os.path.join(BASE_DIR, "inflacion_clean.csv")
@@ -35,6 +44,12 @@ HEADERS = {
 
 # ID de la serie IPC total en BanRep
 ID_IPC = 15000
+DANE_IPC_PAGE = (
+    "https://www.dane.gov.co/index.php/estadisticas-por-tema/precios-y-costos/"
+    "indice-de-precios-al-consumidor-ipc/ipc-informacion-tecnica"
+)
+MESES_ARCHIVO = {"ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+                 "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12}
 
 
 def descargar_ipc() -> pd.DataFrame:
@@ -47,7 +62,10 @@ def descargar_ipc() -> pd.DataFrame:
     try:
         r = requests.get(url, headers=HEADERS, timeout=30)
         r.raise_for_status()
-        data = r.json()[0]["data"]  # lista de [timestamp_ms, valor_ipc]
+        payload = r.json()[0]
+        if "ndice de Precios al Consumidor" not in payload.get("nombre", ""):
+            raise ValueError("La serie BanRep ya no corresponde al IPC")
+        data = payload["data"]
     except Exception as e:
         print(f"ERROR al descargar: {e}")
         return pd.DataFrame()
@@ -55,15 +73,18 @@ def descargar_ipc() -> pd.DataFrame:
     filas = []
     for punto in data:
         ts_ms, valor = punto[0], punto[1]
-        dt = datetime.datetime(1970, 1, 1) + datetime.timedelta(seconds=ts_ms / 1000.0)
+        dt = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(seconds=ts_ms / 1000.0)
         # Normalizar al primer dia del mes (igual que el CSV)
         fecha = pd.Timestamp(dt.year, dt.month, 1)
-        filas.append({"fecha": fecha, "ipc": valor})
+        if valor is not None and valor > 0 and fecha <= pd.Timestamp.today().normalize():
+            filas.append({"fecha": fecha, "ipc": valor})
 
     df = (pd.DataFrame(filas)
             .sort_values("fecha")
             .drop_duplicates("fecha")
             .reset_index(drop=True))
+    if not df["fecha"].equals(pd.Series(pd.date_range(df["fecha"].min(), df["fecha"].max(), freq="MS"))):
+        raise ValueError("Huecos mensuales en la serie IPC")
 
     # Calcular variaciones
     df["inflacion_mensual"] = (df["ipc"].pct_change(1)  * 100).round(2)
@@ -74,9 +95,73 @@ def descargar_ipc() -> pd.DataFrame:
     return df[["fecha", "inflacion_mensual", "inflacion_anual"]]
 
 
+def variacion_publicada_dane():
+    response = requests.get(DANE_IPC_PAGE, timeout=40)
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, "html.parser")
+    matches = []
+    monthly_matches = []
+    for a in soup.select("a[href]"):
+        match = re.search(r"/anex-IPC-([a-z]{3})(20\d{2})\.xlsx$", a["href"], re.I)
+        if match:
+            matches.append((a["href"], match))
+        if re.search(r"/anex-IPC-Variacion-[a-z]{3}20\d{2}\.xlsx$", a["href"], re.I):
+            monthly_matches.append(a["href"])
+    if len(matches) != 1:
+        raise ValueError(f"Anexo IPC DANE vigente ambiguo: {len(matches)}")
+    if len(monthly_matches) != 1:
+        raise ValueError(f"Historia mensual IPC DANE ambigua: {len(monthly_matches)}")
+    href, match = matches[0]
+    anchor = next(a for a in soup.select("a[href]") if a["href"] == href)
+    publication_text = anchor.find_parent("tr").get_text(" ", strip=True)
+    publication_match = re.search(r"(\d{1,2}/\d{1,2}/\d{4})", publication_text)
+    if publication_match is None:
+        raise ValueError("Fecha de publicacion IPC DANE ausente")
+    publication = pd.to_datetime(publication_match.group(1), format="%d/%m/%Y")
+    url = urljoin(DANE_IPC_PAGE, href)
+    year = int(match.group(2))
+    month = MESES_ARCHIVO[match.group(1).lower()]
+    response = requests.get(url, timeout=60)
+    response.raise_for_status()
+    wb = load_workbook(io.BytesIO(response.content), read_only=True, data_only=True)
+    try:
+        rows = list(wb["1"].values)
+        candidates = [r for r in rows if str(r[0]).strip() == str(year)
+                      and isinstance(r[1], (int, float))
+                      and isinstance(r[3], (int, float))]
+        if len(candidates) != 1:
+            raise ValueError("Fila total nacional IPC no identificada")
+        row = candidates[0]
+        latest = (pd.Timestamp(year, month, 1), round(float(row[1]), 2),
+                  round(float(row[3]), 2), url)
+    finally:
+        wb.close()
+    monthly_url = urljoin(DANE_IPC_PAGE, monthly_matches[0])
+    response = requests.get(monthly_url, timeout=60)
+    response.raise_for_status()
+    wb = load_workbook(io.BytesIO(response.content), read_only=True, data_only=True)
+    try:
+        rows = list(wb["VarNal"].values)
+        if str(rows[6][0]).strip() != "Mes":
+            raise ValueError("Estructura historia IPC DANE cambio")
+        monthly = {}
+        for col, candidate_year in enumerate(rows[6][1:], start=1):
+            if not isinstance(candidate_year, int):
+                continue
+            for m in range(1, 13):
+                value = rows[6 + m][col]
+                if isinstance(value, (int, float)):
+                    monthly[pd.Timestamp(candidate_year, m, 1)] = round(float(value), 2)
+        if len(monthly) < 200:
+            raise ValueError("Historia mensual IPC DANE incompleta")
+        return (*latest, monthly, monthly_url, publication)
+    finally:
+        wb.close()
+
+
 def actualizar_inflacion():
     """
-    Descarga el IPC de BanRep y agrega al CSV los meses que no existan todavia.
+    Descarga toda la historia para incorporar revisiones oficiales.
     """
     df_exist = pd.read_csv(CSV_INF, parse_dates=["fecha"])
     ultimo_mes = df_exist["fecha"].max()
@@ -86,23 +171,41 @@ def actualizar_inflacion():
     if df_banrep.empty:
         return
 
-    # Solo meses nuevos
-    df_nuevos = df_banrep[df_banrep["fecha"] > ultimo_mes].dropna().copy()
-
-    if df_nuevos.empty:
-        print("Sin meses nuevos para agregar.")
-        return
-
-    print(f"\nMeses nuevos a agregar: {len(df_nuevos)}")
-    print(df_nuevos.to_string(index=False))
-
-    df_total = (pd.concat([df_exist, df_nuevos])
-                  .drop_duplicates("fecha")
-                  .sort_values("fecha")
-                  .reset_index(drop=True))
-
-    df_total.to_csv(CSV_INF, index=False)
-    print(f"\nOK - CSV actualizado: {len(df_total)} meses en total -> {CSV_INF}")
+    if df_banrep.empty or df_banrep["fecha"].max() < ultimo_mes:
+        raise ValueError("IPC API vacio o mas antiguo que el CSV")
+    df_total = df_banrep[df_banrep["fecha"] >= df_exist["fecha"].min()].dropna().reset_index(drop=True)
+    official_date, monthly, annual, dane_url, monthly_history, monthly_url, publication = variacion_publicada_dane()
+    if official_date != df_total["fecha"].max():
+        raise ValueError("IPC BanRep y DANE tienen ultimo mes distinto")
+    idx = df_total.index[df_total["fecha"] == official_date][0]
+    if abs(df_total.loc[idx, "inflacion_mensual"] - monthly) > 0.05 or abs(
+        df_total.loc[idx, "inflacion_anual"] - annual
+    ) > 0.05:
+        raise ValueError("IPC BanRep y variaciones oficiales DANE no concuerdan")
+    df_total["fuente_mensual"] = "BanRep_IPC_calculada_2_decimales"
+    for fecha, value in monthly_history.items():
+        mask = df_total["fecha"] == fecha
+        if mask.any():
+            if abs(df_total.loc[mask, "inflacion_mensual"].iloc[0] - value) > 0.10:
+                raise ValueError(f"Variacion mensual DANE/BanRep incompatible: {fecha.date()}")
+            df_total.loc[mask, "inflacion_mensual"] = value
+            df_total.loc[mask, "fuente_mensual"] = "DANE_variacion_reportada"
+    df_total.loc[idx, ["inflacion_mensual", "inflacion_anual"]] = [monthly, annual]
+    df_total["fuente_anual"] = "BanRep_IPC_calculada_2_decimales"
+    df_total.loc[idx, "fuente_anual"] = "DANE_variacion_reportada"
+    df_total["fuente_oficial_ultimo_mes"] = dane_url
+    df_total["fuente_historia_mensual"] = monthly_url
+    df_total["fecha_publicacion_vintage"] = "no_disponible"
+    df_total.loc[idx, "fecha_publicacion_vintage"] = publication.strftime("%Y-%m-%d")
+    if df_total.empty or len(df_total) < len(df_exist):
+        raise ValueError("IPC API incompleto")
+    csv_text = df_total.to_csv(index=False, lineterminator="\n")
+    if Path(CSV_INF).read_text(encoding="utf-8") != csv_text:
+        with Path(CSV_INF).open("w", encoding="utf-8", newline="") as target:
+            target.write(csv_text)
+        print(f"OK - IPC actualizado: {len(df_total)} meses hasta {df_total['fecha'].max().date()}")
+    else:
+        print("Sin cambios de IPC")
 
 
 def mostrar_estado():

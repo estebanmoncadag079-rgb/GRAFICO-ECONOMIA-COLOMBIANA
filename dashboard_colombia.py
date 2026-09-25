@@ -1,16 +1,14 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
 ║   DASHBOARD FINANCIERO COLOMBIA — v8.0                          ║
-║   Panel ① ICOLCAP real · Sintético · 7 Grandes                  ║
+║   Panel ① COLCAP oficial publicado por BanRep                  ║
 ║   Panel ② Inflación + PIB (toggle)                              ║
 ║   Panel ③ TES Pesos 1A · 5A · 10A                               ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Archivos requeridos (misma carpeta):                           ║
-║    • datos_colombia_clean.csv                                   ║
+║    • colcap_oficial.csv                                         ║
 ║    • tasas_interes_clean.csv                                     ║
 ║    • inflacion_clean.csv                                        ║
-║    • indices_colombia.csv                                       ║
-║    • icolcap_composicion.csv                                    ║
 ║    • pib_colombia.csv                                           ║
 ║                                                                  ║
 ║  pip install dash plotly pandas                                 ║
@@ -23,56 +21,46 @@ import pandas as pd
 import plotly.graph_objects as go
 from dash import Dash, Input, Output, State, dcc, html, ctx, no_update
 from plotly.subplots import make_subplots
+from validar_datos import isolated_tes_spikes
 
 # ══════════════════════════════════════════════════════════
 # 0. RUTAS
 # ══════════════════════════════════════════════════════════
 BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
-CSV_PRECIO  = os.path.join(BASE_DIR, "datos_colombia_clean.csv")
+CSV_COLCAP  = os.path.join(BASE_DIR, "colcap_oficial.csv")
 CSV_TES     = os.path.join(BASE_DIR, "tasas_interes_clean.csv")
 CSV_INF     = os.path.join(BASE_DIR, "inflacion_clean.csv")
-CSV_INDICES = os.path.join(BASE_DIR, "indices_colombia.csv")
-CSV_COMP    = os.path.join(BASE_DIR, "icolcap_composicion.csv")
 CSV_PIB     = os.path.join(BASE_DIR, "pib_colombia.csv")
+CSV_ESTADO  = os.path.join(BASE_DIR, "estado_fuentes.csv")
 
 # ══════════════════════════════════════════════════════════
 # 1. CARGA Y PREPARACIÓN
 # ══════════════════════════════════════════════════════════
-df_precio  = pd.read_csv(CSV_PRECIO,  parse_dates=["fecha"])
+df_colcap  = pd.read_csv(CSV_COLCAP,  parse_dates=["fecha"])
 df_tes     = pd.read_csv(CSV_TES,     parse_dates=["fecha"])
 df_inf     = pd.read_csv(CSV_INF,     parse_dates=["fecha"])
 
-# Todos los índices diarios: ICOLCAP base100, sintético, 7 grandes
-df_indices = pd.read_csv(CSV_INDICES, parse_dates=["fecha"])
-df_indices["date"] = df_indices["fecha"].dt.normalize()
-
-df_comp = pd.read_csv(CSV_COMP)
 df_pib  = pd.read_csv(CSV_PIB, parse_dates=["fecha"])
+df_estado = pd.read_csv(CSV_ESTADO)
 
 # Merge diario principal
-for _df in [df_precio, df_tes]:
+for _df in [df_colcap, df_tes]:
     _df["date"] = _df["fecha"].dt.normalize()
 
-df_daily = (df_precio
+df_daily = (pd.DataFrame({"date": pd.concat(
+        [df_colcap["date"], df_tes["date"]]
+    ).drop_duplicates().sort_values().reset_index(drop=True)})
+    .merge(df_colcap[["date","colcap_puntos","colcap_base100"]], on="date", how="left")
     .merge(df_tes[["date","tes_pesos_1y","tes_pesos_5y","tes_pesos_10y"]], on="date", how="left")
-    .merge(df_indices[["date","icolcap_base100","sintetico_base100","grandes_base100"]], on="date", how="left")
-    .dropna(subset=["tes_pesos_1y"]).reset_index(drop=True))
+    )
+df_daily["fecha"] = df_daily["date"]
+df_daily = df_daily[df_daily["fecha"] <= pd.Timestamp.today().normalize()].reset_index(drop=True)
 
-# (sintetico_base100 y grandes_base100 ya vienen diarios desde indices_colombia.csv)
-df_daily["mes"] = df_daily["fecha"].dt.to_period("M")
-df_inf["mes"]   = df_inf["fecha"].dt.to_period("M")
-df_daily = df_daily.merge(
-    df_inf[["mes","inflacion_mensual","inflacion_anual"]], on="mes", how="left")
-
-# PIB: preparar crecimiento YoY limpio
-df_pib = df_pib.dropna(subset=["pib_crecimiento_yoy"]).copy()
+# El PIB es trimestral y se conserva en su tabla original.
+df_pib = df_pib.dropna(subset=["pib_real_yoy"]).copy()
 
 FECHA_INI = df_daily["fecha"].min()
 FECHA_FIN = df_daily["fecha"].max()
-
-# Empresas grandes
-GRANDES = df_comp[df_comp["es_grande"]]["ticker"].tolist()
-GRANDES_NOMBRES = dict(zip(df_comp["ticker"], df_comp["nombre"]))
 
 print(f"Dataset: {len(df_daily):,} filas | {FECHA_INI.date()} -> {FECHA_FIN.date()}")
 
@@ -87,7 +75,7 @@ BORDER    = "#e2e8f0"
 TEXT      = "#0f172a"
 MUTED     = "#64748b"
 
-C_BOLSA    = "#3fb950"   # ICOLCAP real
+C_BOLSA    = "#3fb950"   # COLCAP oficial
 C_SINTET   = "#38bdf8"   # Sintético igualitario
 C_GRANDES  = "#fbbf24"   # 7 Grandes
 C_INF_M    = "#fb923c"
@@ -130,6 +118,14 @@ def mes_es(ts):
     ts = pd.to_datetime(ts)
     return f"{MESES_ES[ts.month]} {ts.year}"
 
+def periodo_fuente(item):
+    ts = pd.to_datetime(item["ultima_observacion"])
+    if item["frecuencia"] == "trimestral":
+        return f"T{ts.quarter} {ts.year}"
+    if item["frecuencia"] == "mensual":
+        return mes_es(ts)
+    return fecha_es(ts)
+
 OFFSETS = {
     "3M": pd.DateOffset(months=3), "6M": pd.DateOffset(months=6),
     "1A": pd.DateOffset(years=1),  "3A": pd.DateOffset(years=3),
@@ -146,6 +142,10 @@ def filter_window_pib(window):
     if window in OFFSETS:
         return dff[dff["fecha"] >= dff["fecha"].max() - OFFSETS[window]]
     return dff
+
+def latest_on_or_before(table, fecha, required):
+    dff = table[(table["fecha"] <= pd.to_datetime(fecha))].dropna(subset=required)
+    return None if dff.empty else dff.iloc[-1]
 
 def nearest_row(dff, x_val):
     if dff.empty or not x_val:
@@ -165,12 +165,8 @@ def get_hover_row(hover_data, dff):
             return row
     return dff.iloc[-1]
 
-def agg_inflacion(dff):
-    return (dff.groupby("mes", as_index=False)
-               .agg(fecha=("fecha","first"),
-                    inflacion_mensual=("inflacion_mensual","first"),
-                    inflacion_anual=("inflacion_anual","first"))
-               .sort_values("fecha"))
+def latest_inflation_row(fecha):
+    return latest_on_or_before(df_inf, fecha, ["inflacion_anual"])
 
 # ══════════════════════════════════════════════════════════
 # 4. BASE LAYOUT
@@ -199,43 +195,21 @@ def yaxis_base(title, suffix=""):
                 ticksuffix=suffix, **SPIKE_CFG)
 
 # ══════════════════════════════════════════════════════════
-# 5A. PANEL ① — BOLSA UNIFICADO
-#   Línea 1: ICOLCAP real (base 100) — verde
-#   Línea 2: Índice Sintético igualitario (base 100) — celeste
-#   Línea 3: Las 7 Grandes Colombia (base 100) — amarillo
-#   Línea 4: Media 20D del ICOLCAP — gris punteado
-#   Línea 5: Media 50D del ICOLCAP — amarillo punteado
+# 5A. COLCAP OFICIAL
 # ══════════════════════════════════════════════════════════
 def make_fig_bolsa(dff, x_range=None):
     fig = go.Figure()
 
-    # ── ICOLCAP real base 100 ─────────────────────────────
+    # COLCAP publicado por BanRep, normalizado sobre 2009-02-09.
     fig.add_trace(go.Scatter(
-        x=dff["fecha"], y=dff["icolcap_base100"],
-        name="ICOLCAP General",
+        x=dff["fecha"], y=dff["colcap_base100"],
+        name="COLCAP oficial · base 100",
         mode="lines", line=dict(color=C_BOLSA, width=2.5),
-        fill="tozeroy", fillcolor="rgba(63,185,80,0.06)",
-        hovertemplate="<b>ICOLCAP General:</b> %{y:.2f}<extra></extra>",
-    ))
-
-    # ── Índice Igual Ponderación ───────────────────────
-    fig.add_trace(go.Scatter(
-        x=dff["fecha"], y=dff["sintetico_base100"],
-        name="Índice Diversificado Colombia",
-        mode="lines", line=dict(color=C_SINTET, width=2.0), opacity=0.85,
-        hovertemplate="<b>Índice Diversificado:</b> %{y:.2f}<extra></extra>",
-    ))
-
-    # ── 7 Grandes Colombia ─────────────────────────────
-    fig.add_trace(go.Scatter(
-        x=dff["fecha"], y=dff["grandes_base100"],
-        name="7 Magníficas Colombianas",
-        mode="lines", line=dict(color=C_GRANDES, width=2.0), opacity=0.85,
-        hovertemplate="<b>7 Magníficas:</b> %{y:.2f}<extra></extra>",
+        hovertemplate="<b>COLCAP:</b> %{y:.2f} (base 100)<extra></extra>",
     ))
 
     fig.add_hline(y=100, line_dash="dot", line_color="#334155", line_width=1,
-        annotation_text="  Base Ene 2009 = 100",
+        annotation_text="  Base 09 feb 2009 = 100",
         annotation_font=dict(color="#475569", size=9),
         annotation_position="right")
 
@@ -259,92 +233,56 @@ def _color_inf_mensual(v):
 def make_fig_inflacion(dff, x_range=None, show_layers=None):
     if show_layers is None:
         show_layers = ["inf_mensual", "inf_anual", "pib"]
-
-    df_inf_m = agg_inflacion(dff)
-    dff_pib  = filter_window_pib(None)
-
-    fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-    # ── Zona meta BanRep 2–4 % (fondo sutil) ─────────────
-    if "inf_anual" in show_layers:
-        fig.add_hrect(
-            y0=2.0, y1=4.0,
-            fillcolor="rgba(74,222,128,0.05)", line_width=0, layer="below",
-        )
-
-    # ── Barras inflación mensual — escala de calor ────────
-    if "inf_mensual" in show_layers:
-        cb = [_color_inf_mensual(v) for v in df_inf_m["inflacion_mensual"]]
+    show_ipc = any(layer in show_layers for layer in ("inf_mensual", "inf_anual"))
+    show_pib = "pib" in show_layers
+    if not show_ipc and not show_pib:
+        return go.Figure()
+    both = show_ipc and show_pib
+    specs = [[{"secondary_y": True}], [{"secondary_y": False}]] if both else [
+        [{"secondary_y": show_ipc}]
+    ]
+    fig = make_subplots(rows=2 if both else 1, cols=1, specs=specs,
+                        shared_xaxes=both, vertical_spacing=0.12,
+                        row_heights=[0.55, 0.45] if both else None)
+    first, last = dff["fecha"].min(), dff["fecha"].max()
+    ipc = df_inf[df_inf["fecha"].between(first, last)]
+    pib = df_pib[df_pib["fecha"].between(first, last)]
+    if show_ipc:
+        if "inf_anual" in show_layers:
+            fig.add_hrect(y0=2, y1=4, fillcolor="rgba(74,222,128,0.08)",
+                          line_width=0, row=1, col=1, secondary_y=False)
+            fig.add_trace(go.Scatter(
+                x=ipc["fecha"], y=ipc["inflacion_anual"], name="IPC anual · 12 meses",
+                mode="lines", line=dict(color=C_INF_A, width=2.5),
+                hovertemplate="IPC anual %{x|%b %Y}: %{y:.2f}%<extra></extra>",
+            ), row=1, col=1, secondary_y=False)
+            fig.add_hline(y=3, line_dash="dash", line_color=MUTED,
+                          line_width=1, row=1, col=1, secondary_y=False)
+        if "inf_mensual" in show_layers:
+            fig.add_trace(go.Bar(
+                x=ipc["fecha"], y=ipc["inflacion_mensual"],
+                name="IPC mensual", marker_color=C_INF_M, opacity=0.75,
+                hovertemplate="IPC mensual %{x|%b %Y}: %{y:.2f}%<extra></extra>",
+            ), row=1, col=1, secondary_y=True)
+        fig.update_yaxes(title_text="IPC anual (%)", ticksuffix="%",
+                         gridcolor=GRID_CLR, row=1, col=1, secondary_y=False)
+        fig.update_yaxes(title_text="IPC mensual (%)", ticksuffix="%",
+                         showgrid=False, row=1, col=1, secondary_y=True)
+    if show_pib:
+        pib_row = 2 if both else 1
         fig.add_trace(go.Bar(
-            x=df_inf_m["fecha"], y=df_inf_m["inflacion_mensual"],
-            name="Inflación mensual",
-            marker=dict(color=cb, opacity=0.75, line=dict(width=0)),
-            hovertemplate="<b>Inflación mensual:</b> %{y:.2f}%<extra></extra>",
-        ), secondary_y=False)
-
-    # ── Área + línea inflación anual ──────────────────────
-    if "inf_anual" in show_layers:
-        fig.add_trace(go.Scatter(
-            x=df_inf_m["fecha"], y=df_inf_m["inflacion_anual"],
-            mode="lines",
-            line=dict(color="rgba(244,63,94,0)", width=0),
-            fill="tozeroy", fillcolor="rgba(244,63,94,0.10)",
-            showlegend=False, hoverinfo="skip",
-        ), secondary_y=False)
-        fig.add_trace(go.Scatter(
-            x=df_inf_m["fecha"], y=df_inf_m["inflacion_anual"],
-            name="Inflación anual 12M",
-            mode="lines", line=dict(color="#f43f5e", width=2.5),
-            hovertemplate="<b>Inflación anual 12M:</b> %{y:.2f}%<extra></extra>",
-        ), secondary_y=False)
-        fig.add_trace(go.Scatter(
-            x=[df_inf_m["fecha"].min(), df_inf_m["fecha"].max()],
-            y=[3.0, 3.0],
-            name="Meta BanRep 3%",
-            mode="lines",
-            line=dict(color="rgba(148,163,184,0.55)", width=1.5, dash="dash"),
-            hovertemplate="<b>Meta BanRep:</b> 3.00%<extra></extra>",
-        ), secondary_y=False)
-
-    # ── PIB crecimiento YoY — barras semitransparentes ────
-    if "pib" in show_layers:
-        dff_pib_f = dff_pib[
-            (dff_pib["fecha"] >= dff["fecha"].min()) &
-            (dff_pib["fecha"] <= dff["fecha"].max())
-        ]
-        colores_pib = [
-            "rgba(16,185,129,0.65)" if v >= 0 else "rgba(239,68,68,0.65)"
-            for v in dff_pib_f["pib_crecimiento_yoy"]
-        ]
-        fig.add_trace(go.Bar(
-            x=dff_pib_f["fecha"], y=dff_pib_f["pib_crecimiento_yoy"],
-            name="PIB — Crecimiento anual (%)",
-            marker=dict(color=colores_pib, line=dict(width=0)),
-            hovertemplate=(
-                "<b>PIB Colombia:</b> %{y:.2f}% interanual<br>"
-                "<b>Trimestre:</b> %{customdata}<extra></extra>"
-            ),
-            customdata=dff_pib_f["trimestre"].values,
-        ), secondary_y=True)
-        fig.add_hline(y=0, line_dash="solid",
-                      line_color="rgba(51,65,85,0.6)", line_width=1, row=1, col=1)
-
-    fig.update_yaxes(
-        title_text="Inflación (%)", ticksuffix="%",
-        gridcolor=GRID_CLR, zeroline=False, **SPIKE_CFG,
-        secondary_y=False,
-    )
-    fig.update_yaxes(
-        title_text="", showticklabels=False,
-        showgrid=False, zeroline=False, showline=False,
-        secondary_y=True,
-    )
-    fig.update_layout(
-        **BASE_LAYOUT, height=320,
-        xaxis=dict(**xaxis_base(x_range)),
-        barmode="overlay",
-    )
-    fig.update_layout(margin_r=15)
+            x=pib["fecha"], y=pib["pib_real_yoy"],
+            name="PIB real · interanual",
+            marker_color=[C_PIB if v >= 0 else C_ROJO for v in pib["pib_real_yoy"]],
+            customdata=pib["trimestre"],
+            hovertemplate="PIB real %{customdata}: %{y:.2f}%<extra></extra>",
+        ), row=pib_row, col=1)
+        fig.add_hline(y=0, line_color=MUTED, line_width=1, row=pib_row, col=1)
+        fig.update_yaxes(title_text="PIB real (%)", ticksuffix="%",
+                         gridcolor=GRID_CLR, row=pib_row, col=1)
+    fig.update_layout(**BASE_LAYOUT, height=440 if both else 310, barmode="group")
+    fig.update_layout(legend=dict(orientation="h", y=1.08))
+    fig.update_xaxes(**xaxis_base(x_range))
     return fig
 
 # ══════════════════════════════════════════════════════════
@@ -365,9 +303,10 @@ def make_fig_tes(dff, active_tenors, x_range=None):
     ]:
         vis = True if key in active_tenors else "legendonly"
         grp = f"tes_{key}"
+        values = dff[col].mask(isolated_tes_spikes(dff[col]))
         # Área rellena (vinculada al grupo de leyenda)
         fig.add_trace(go.Scatter(
-            x=dff["fecha"], y=dff[col],
+            x=dff["fecha"], y=values,
             mode="lines", line=dict(color=color, width=0),
             fill="tozeroy", fillcolor=_TES_FILL[col],
             legendgroup=grp, showlegend=False, hoverinfo="skip",
@@ -375,7 +314,7 @@ def make_fig_tes(dff, active_tenors, x_range=None):
         ))
         # Línea principal
         fig.add_trace(go.Scatter(
-            x=dff["fecha"], y=dff[col],
+            x=dff["fecha"], y=values,
             name=label, visible=vis, mode="lines",
             line=dict(color=color, width=2.5),
             legendgroup=grp,
@@ -409,7 +348,7 @@ def make_curve_fig(row, active_tenors):
         x=x_vals, y=y_vals, mode="lines+markers+text",
         text=[f"<b>{v:.2f}%</b>" for v in y_vals],
         textposition="top center", cliponaxis=False,
-        textfont=dict(color="#fff", size=13),
+        textfont=dict(color=TEXT, size=13),
         line=dict(color=C_AZUL, width=2.5),
         marker=dict(size=13, color=c_vals, line=dict(width=2, color="#fff")),
         hovertemplate="<b>%{x}:</b> %{y:.2f}%<extra></extra>",
@@ -470,9 +409,9 @@ modal = html.Div(id="modal", children=[
                      style={"fontSize":"11px","color":MUTED,"marginBottom":"6px"}),
             dcc.RadioItems(id="detail-var",
                 options=[
-                    {"label":" Bolsa (ICOLCAP · Sintético · 7 Grandes)", "value":"bolsa"},
+                    {"label":" COLCAP oficial", "value":"bolsa"},
                     {"label":" Inflación (mensual + anual)",    "value":"inflacion"},
-                    {"label":" PIB Colombia",                   "value":"pib"},
+                    {"label":" PIB real DANE",                  "value":"pib"},
                     {"label":" Inflación + PIB (comparación)",  "value":"inf_pib"},
                     {"label":" TES Pesos (1A · 5A · 10A)",      "value":"tes"},
                 ],
@@ -530,7 +469,7 @@ app.layout = html.Div([
                      style={"height":"58px","objectFit":"contain"}),
             html.Img(src="/assets/Logo Schema.png",
                      style={"height":"58px","objectFit":"contain"}),
-        ], style={
+        ], className="header-logos", style={
             "position":"absolute","left":"18px","top":"50%",
             "transform":"translateY(-50%)",
             "display":"flex","flexDirection":"row","alignItems":"center","gap":"10px",
@@ -543,33 +482,60 @@ app.layout = html.Div([
             html.Div("Dashboard de Indicadores Económicos y Bursátiles",
                      style={"fontSize":"15px","color":MUTED,"textAlign":"center",
                             "marginTop":"5px","letterSpacing":"0.3px"}),
-        ], style={"width":"100%"}),
-    ], style={
+        ], className="header-title", style={"width":"100%"}),
+    ], className="dashboard-header", style={
         "position":"relative",
         "background":BG_PANEL,"border":f"1px solid {BORDER}",
         "borderRadius":"12px","padding":"16px 18px","marginBottom":"12px",
         "display":"flex","alignItems":"center","justifyContent":"center",
     }),
 
-    # Controles ocultos (necesarios para callbacks)
+    # Controles principales
     html.Div([
+        html.Div("Período", style={"fontSize":"11px","fontWeight":"700","color":MUTED,"marginBottom":"4px"}),
         dcc.Dropdown(id="time-window",
             options=[{"label":l,"value":v} for l,v in [
                 ("3 meses","3M"),("6 meses","6M"),("1 año","1A"),
                 ("3 años","3A"),("5 años","5A"),("Todo","ALL")]],
-            value="ALL", clearable=False),
+            value="ALL", clearable=False, style={"minWidth":"160px"}),
+        html.Div("Capas macro", style={"fontSize":"11px","fontWeight":"700","color":MUTED,"marginBottom":"4px","marginLeft":"10px"}),
         dcc.Checklist(id="inf-layers",
             options=[
-                {"label":"inf_mensual","value":"inf_mensual"},
-                {"label":"inf_anual",  "value":"inf_anual"},
-                {"label":"pib",        "value":"pib"},
+                {"label":"Inflación mensual","value":"inf_mensual"},
+                {"label":"Inflación anual","value":"inf_anual"},
+                {"label":"PIB real","value":"pib"},
             ],
-            value=["inf_mensual","inf_anual","pib"]),
+            value=["inf_mensual","inf_anual","pib"], inline=True,
+            inputStyle={"marginRight":"5px","marginLeft":"10px"},
+            labelStyle={"fontSize":"12px","color":TEXT,"whiteSpace":"nowrap"}),
+        html.Div("Curva TES", style={"fontSize":"11px","fontWeight":"700","color":MUTED,"marginBottom":"4px","marginLeft":"10px"}),
         dcc.Checklist(id="curve-toggle",
             options=[{"label":v,"value":v} for v in ["1A","5A","10A"]],
-            value=["1A","5A","10A"]),
-        html.Button("Ver en Detalle", id="open-modal", n_clicks=0),
-    ], style={"display":"none"}),
+            value=["1A","5A","10A"], inline=True,
+            inputStyle={"marginRight":"5px","marginLeft":"10px"},
+            labelStyle={"fontSize":"12px","color":TEXT,"whiteSpace":"nowrap"}),
+        html.Button("Ver detalle", id="open-modal", n_clicks=0, style={
+            "background":TEXT,"color":"#ffffff","border":"0","borderRadius":"8px",
+            "padding":"8px 14px","fontSize":"12px","fontWeight":"700",
+            "cursor":"pointer","marginLeft":"auto",
+        }),
+    ], style={
+        "display":"flex","alignItems":"center","gap":"6px","flexWrap":"wrap",
+        "background":BG_PANEL,"border":f"1px solid {BORDER}",
+        "borderRadius":"12px","padding":"10px 12px","marginBottom":"12px",
+    }),
+
+    html.Div([
+        html.Div([
+            html.Span(str(item["fuente"]), style={"fontWeight":"700","color":TEXT}),
+            html.Span(periodo_fuente(item),
+                      style={"color":MUTED,"marginLeft":"7px"}),
+            html.Span("●", title=str(item["estado"]),
+                      style={"color":"#16a34a" if item["estado"] == "vigente" else "#d97706",
+                             "marginLeft":"7px"}),
+        ], style={"whiteSpace":"nowrap","fontSize":"11px"})
+        for _, item in df_estado[df_estado["fuente"] != "Canastas experimentales"].iterrows()
+    ], style={"display":"flex","gap":"18px","flexWrap":"wrap","padding":"0 4px 10px"}),
 
     # CUERPO
     html.Div([
@@ -583,7 +549,7 @@ app.layout = html.Div([
 
             # Los 3 gráficos — orden: ① Inflación/PIB · ② TES · ③ Bolsa
             html.Div([
-                html.Div("INFLACIÓN COLOMBIA & PIB",
+                html.Div("INFLACIÓN MENSUAL Y PIB REAL TRIMESTRAL",
                          style={"fontSize":"19px","fontWeight":"900","color":TEXT,
                                 "textAlign":"center","letterSpacing":"1.5px"}),
             ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
@@ -602,7 +568,7 @@ app.layout = html.Div([
                 html.Div("SEÑALES DE MERCADO COLOMBIANO",
                          style={"fontSize":"19px","fontWeight":"900","color":TEXT,
                                 "textAlign":"center","letterSpacing":"1.5px"}),
-                html.Div("Tasas TES Pesos — Bonos Soberanos",
+                html.Div("Curva cero cupón TES pesos · observaciones diarias",
                          style={"fontSize":"13px","color":MUTED,"textAlign":"center","marginTop":"3px"}),
             ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
                       "borderRadius":"8px","marginBottom":"3px"}),
@@ -617,7 +583,7 @@ app.layout = html.Div([
                 style={"marginBottom":"4px"}),
 
             html.Div([
-                html.Div("EVOLUCIÓN DEL ICOLCAP",
+                html.Div("COLCAP OFICIAL · MERCADO ACCIONARIO",
                          style={"fontSize":"19px","fontWeight":"900","color":TEXT,
                                 "textAlign":"center","letterSpacing":"1.5px"}),
             ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
@@ -631,7 +597,7 @@ app.layout = html.Div([
     "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
 }),
 
-        ], style={"width":"72%","background":BG_PANEL,
+        ], className="dashboard-main", style={"width":"72%","background":BG_PANEL,
                   "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"10px"}),
 
         # ── PANEL DERECHO ────────────────────────────────
@@ -674,19 +640,19 @@ app.layout = html.Div([
                 style={"height":"260px"}),
 
             html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
-            html.Div("Valores en la fecha activa",
+            html.Div("Últimas observaciones por frecuencia",
                      style={"fontSize":"10px","color":MUTED,"marginBottom":"6px"}),
             html.Div(id="curve-metrics",
                      style={"display":"flex","gap":"5px","flexWrap":"wrap"}),
 
             html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
 
-        ], style={"width":"28%","background":BG_PANEL,
+        ], className="dashboard-side", style={"width":"28%","background":BG_PANEL,
                   "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"14px",
                   "display":"flex","flexDirection":"column",
                   "overflowY":"auto","maxHeight":"1060px"}),
 
-    ], style={"display":"flex","gap":"12px","alignItems":"flex-start"}),
+    ], className="dashboard-body", style={"display":"flex","gap":"12px","alignItems":"flex-start"}),
 
     # Stores
     dcc.Store(id="detail-window",  data="1A"),
@@ -744,7 +710,7 @@ def sync_zoom(*args):
 def upd_bolsa(window, xrd, synced):
     if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "bolsa" not in (synced or []):
         return no_update
-    dff = filter_window(df_daily, window)
+    dff = filter_window(df_colcap, window)
     xr  = (xrd or {}).get("range") if "bolsa" in (synced or []) else None
     return make_fig_bolsa(dff, xr)
 
@@ -772,7 +738,7 @@ def upd_inflacion(window, xrd, synced, layers):
 def upd_tes(window, xrd, synced, active_tenors):
     if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "tes" not in (synced or []):
         return no_update
-    dff = filter_window(df_daily, window)
+    dff = filter_window(df_tes, window)
     xr  = (xrd or {}).get("range") if "tes" in (synced or []) else None
     return make_fig_tes(dff, active_tenors, xr)
 
@@ -805,7 +771,9 @@ def update_curve(*args):
         row = get_hover_row(click_map[trigger], dff)
         nueva_fecha = str(row["fecha"])
     elif fecha_fijada and trigger not in ALL_CHARTS:
-        row = nearest_row(dff, fecha_fijada) or dff.iloc[-1]
+        row = nearest_row(dff, fecha_fijada)
+        if row is None:
+            row = dff.iloc[-1]
         nueva_fecha = fecha_fijada
     elif trigger in ALL_CHARTS:
         row = get_hover_row(hover_map.get(trigger), dff)
@@ -814,37 +782,44 @@ def update_curve(*args):
         row = dff.iloc[-1]
         nueva_fecha = None
 
-    # Tarjetas de métricas
+    # Cada frecuencia conserva su propia ultima observacion anterior a la fecha activa.
+    tes_row = latest_on_or_before(df_tes, row["fecha"],
+                                  ["tes_pesos_1y","tes_pesos_5y","tes_pesos_10y"])
     col_map = {"1A":"tes_pesos_1y","5A":"tes_pesos_5y","10A":"tes_pesos_10y"}
     desc    = {"1A":"Corto plazo","5A":"Medio plazo","10A":"Largo plazo"}
     cards   = []
     for key in ["1A","5A","10A"]:
-        if key in active_tenors:
+        if key in active_tenors and tes_row is not None:
             cards.append(metric_card(f"TES {key}",
-                f"{float(row[col_map[key]]):.2f}%", TENOR_COLORS[col_map[key]], desc[key]))
-    if "1A" in active_tenors and "10A" in active_tenors:
-        sp = float(row["tes_pesos_10y"]) - float(row["tes_pesos_1y"])
+                f"{float(tes_row[col_map[key]]):.2f}%", TENOR_COLORS[col_map[key]],
+                f"{desc[key]} · {fecha_es(tes_row['fecha'])}"))
+    if "1A" in active_tenors and "10A" in active_tenors and tes_row is not None:
+        sp = float(tes_row["tes_pesos_10y"]) - float(tes_row["tes_pesos_1y"])
         st = "Normal" if sp > 0.3 else ("Invertida" if sp < 0 else "Plana")
         co = C_AZUL if sp > 0.3 else (C_ROJO if sp < 0 else C_AMARILLO)
-        cards.append(metric_card("Spread 10A-1A", f"{sp:+.2f}pp", co, st))
+        cards.append(metric_card("Spread 10A-1A", f"{sp:+.2f}pp", co,
+                                 f"{st} · {fecha_es(tes_row['fecha'])}"))
 
-    cards.append(metric_card("ICOLCAP", f"{float(row['close']):,.2f}", C_BOLSA, "puntos"))
-    if pd.notna(row.get("inflacion_mensual")):
+    colcap_row = latest_on_or_before(df_colcap, row["fecha"], ["colcap_puntos"])
+    if colcap_row is not None:
+        cards.append(metric_card("COLCAP oficial", f"{float(colcap_row['colcap_puntos']):,.2f}",
+                                 C_BOLSA, f"puntos · {fecha_es(colcap_row['fecha'])}"))
+    inf_row = latest_inflation_row(row["fecha"])
+    if inf_row is not None and pd.notna(inf_row.get("inflacion_mensual")):
         cards.append(metric_card("Inflación mensual",
-            f"{float(row['inflacion_mensual']):.2f}%", C_INF_M, mes_es(row["fecha"])))
-    if pd.notna(row.get("inflacion_anual")):
+            f"{float(inf_row['inflacion_mensual']):.2f}%", C_INF_M, mes_es(inf_row["fecha"])))
+    if inf_row is not None and pd.notna(inf_row.get("inflacion_anual")):
         cards.append(metric_card("Inflación anual 12M",
-            f"{float(row['inflacion_anual']):.2f}%", C_INF_A, "acumulada"))
-    # PIB más cercano
-    pib_row = nearest_row(df_pib, row["fecha"])
-    if pib_row is not None and pd.notna(pib_row.get("pib_crecimiento_yoy")):
-        cards.append(metric_card("PIB crecimiento",
-            f"{float(pib_row['pib_crecimiento_yoy']):.2f}%", C_PIB,
-            str(pib_row.get("trimestre",""))))
+            f"{float(inf_row['inflacion_anual']):.2f}%", C_INF_A, mes_es(inf_row["fecha"])))
+    pib_row = latest_on_or_before(df_pib, row["fecha"], ["pib_real_yoy"])
+    if pib_row is not None:
+        cards.append(metric_card("PIB real interanual",
+            f"{float(pib_row['pib_real_yoy']):.2f}%", C_PIB,
+            f"{pib_row['trimestre']} · vintage {pib_row['fecha_publicacion_vintage']}"))
 
     label_f = (f"📌 Fijado: {fecha_es(row['fecha'])}" if nueva_fecha
                else f"👁 Explorando: {fecha_es(row['fecha'])}")
-    return make_curve_fig(row, active_tenors), label_f, cards, nueva_fecha
+    return make_curve_fig(tes_row, active_tenors) if tes_row is not None else go.Figure(), label_f, cards, nueva_fecha
 
 
 @app.callback(
@@ -892,7 +867,7 @@ def set_detail_window(*args):
 def update_detail(variable, window, active_tenors, layers):
     dff = filter_window(df_daily, window or "1A")
     if variable == "bolsa":
-        return make_fig_bolsa(dff)
+        return make_fig_bolsa(filter_window(df_colcap, window or "1A"))
     elif variable == "inflacion":
         return make_fig_inflacion(dff, show_layers=["inf_mensual","inf_anual"])
     elif variable == "pib":

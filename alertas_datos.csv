@@ -1,0 +1,8 @@
+archivo,fecha,variable,valor,tipo,accion
+tasas_interes_clean.csv,2009-06-23,tes_pesos_1y,0.51,salto_aislado_revertido_mayor_2pp,conservado_en_csv_omitido_en_grafico
+tasas_interes_clean.csv,2004-12-24,tes_pesos_5y,9.02,salto_aislado_revertido_mayor_2pp,conservado_en_csv_omitido_en_grafico
+tasas_interes_clean.csv,2003-03-31,tes_pesos_10y,14.55,salto_aislado_revertido_mayor_2pp,conservado_en_csv_omitido_en_grafico
+tasas_interes_clean.csv,2003-04-10,tes_pesos_10y,13.0,salto_aislado_revertido_mayor_2pp,conservado_en_csv_omitido_en_grafico
+tasas_interes_clean.csv,2003-04-28,tes_pesos_10y,14.32,salto_aislado_revertido_mayor_2pp,conservado_en_csv_omitido_en_grafico
+tasas_interes_clean.csv,2004-12-24,tes_pesos_10y,8.61,salto_aislado_revertido_mayor_2pp,conservado_en_csv_omitido_en_grafico
+tasas_interes_clean.csv,2007-12-24,tes_pesos_10y,7.12,salto_aislado_revertido_mayor_2pp,conservado_en_csv_omitido_en_grafico

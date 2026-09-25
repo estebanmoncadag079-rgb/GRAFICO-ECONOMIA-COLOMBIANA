@@ -1,231 +1,160 @@
-"""
-actualizar_pib.py
-Actualiza pib_colombia.csv con dos metodos:
+"""Actualiza PIB trimestral desde los anexos de produccion del DANE.
 
-  1. AUTOMATICO (World Bank API)
-     - Datos anuales hasta ~2 anhos atras
-     - Distribuye el valor anual a los 4 trimestres
-
-  2. MANUAL (DANE oficial)
-     - Cuando DANE publica un nuevo trimestre (cada ~3 meses)
-     - Corres: python actualizar_pib.py --trimestre "T2 2026" --valor 408.3 --crecimiento 3.84
-     - Los valores los consigues en dane.gov.co -> Cuentas Nacionales Trimestrales
-
-DANE publica nuevos datos aproximadamente:
-  T1 (ene-mar) -> disponible en mayo/junio
-  T2 (abr-jun) -> disponible en agosto/septiembre
-  T3 (jul-sep) -> disponible en noviembre/diciembre
-  T4 (oct-dic) -> disponible en febrero/marzo del anho siguiente
+El DANE revisa periodos anteriores. Por eso se sustituye toda la serie
+verificada en cada publicacion; nunca se crean trimestres desde datos anuales.
 """
 
-import os, sys, argparse, requests
+import argparse
+import io
+import re
+from pathlib import Path
+from urllib.parse import urljoin, urlparse
+
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+from openpyxl import load_workbook
 
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-CSV_PIB    = os.path.join(BASE_DIR, "pib_colombia.csv")
+BASE_DIR = Path(__file__).resolve().parent
+CSV_PIB = BASE_DIR / "pib_colombia.csv"
+DANE_PAGE = (
+    "https://www.dane.gov.co/index.php/estadisticas-por-tema/"
+    "cuentas-nacionales/cuentas-nacionales-trimestrales/pib-informacion-tecnica"
+)
+QUARTERS = {"I": 1, "II": 4, "III": 7, "IV": 10}
 
-# Meses de inicio por trimestre
-TRIMESTRE_MES = {"T1": 1, "T2": 4, "T3": 7, "T4": 10}
+
+def annex_links(html):
+    soup = BeautifulSoup(html, "html.parser")
+    result = {}
+    for kind, marker in {
+        "real": "anex-ProduccionConstantes-",
+        "nominal": "anex-ProduccionCorriente-",
+    }.items():
+        links = [a for a in soup.select("a[href]") if marker.lower() in a["href"].lower()]
+        if len(links) != 1:
+            raise ValueError(f"Se esperaba 1 anexo {kind} vigente; encontrados: {len(links)}")
+        anchor = links[0]
+        url = urljoin(DANE_PAGE, anchor["href"])
+        if urlparse(url).hostname != "www.dane.gov.co" or not url.lower().endswith(".xlsx"):
+            raise ValueError(f"URL de anexo no valida: {url}")
+        row = anchor.find_parent("tr")
+        if row is None:
+            raise ValueError(f"Falta fecha de publicacion para {kind}")
+        match = pd.Series([row.get_text(" ", strip=True)]).str.extract(
+            r"(\d{1,2}/\d{1,2}/\d{4})"
+        )[0].iloc[0]
+        if pd.isna(match):
+            raise ValueError(f"Falta fecha de publicacion para {kind}")
+        result[kind] = (url, pd.to_datetime(match, format="%d/%m/%Y"))
+    if result["real"][1] != result["nominal"][1]:
+        raise ValueError("Los anexos reales y nominales tienen fechas distintas")
+    return result
 
 
-# ── 1. ACTUALIZACION AUTOMATICA — World Bank ──────────────────
-
-def obtener_pib_worldbank() -> pd.DataFrame:
-    """
-    Descarga crecimiento PIB anual de Colombia desde World Bank API.
-    Retorna DataFrame con columnas: anho, pib_crecimiento_anual
-    """
-    url = "https://api.worldbank.org/v2/country/COL/indicator/NY.GDP.MKTP.KD.ZG"
-    params = {"format": "json", "per_page": 100, "mrv": 60}
-
-    print("Descargando datos World Bank...")
+def read_pib_levels(content, sheet_name):
+    wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
     try:
-        r = requests.get(url, params=params, timeout=15)
-        r.raise_for_status()
-        data = r.json()
-        entries = data[1]
-
-        filas = []
-        for e in entries:
-            if e["value"] is not None:
-                filas.append({"anho": int(e["date"]), "crecimiento": round(float(e["value"]), 6)})
-
-        df = pd.DataFrame(filas).sort_values("anho").reset_index(drop=True)
-        print(f"OK - World Bank: {len(df)} anhos ({df['anho'].min()}-{df['anho'].max()})")
-        return df
-
-    except Exception as e:
-        print(f"ERROR World Bank: {e}")
-        return pd.DataFrame()
-
-
-def actualizar_desde_worldbank():
-    """
-    Compara el CSV existente con los datos de World Bank
-    y agrega los anhos que falten (como 4 filas trimestrales cada uno).
-    """
-    df_wb  = obtener_pib_worldbank()
-    if df_wb.empty:
-        return
-
-    df_pib = pd.read_csv(CSV_PIB, parse_dates=["fecha"])
-
-    # Solo considerar años desde 2009 (rango del dashboard)
-    anhos_existentes = set(df_pib["fecha"].dt.year.unique())
-    anhos_wb         = set(df_wb[df_wb["anho"] >= 2009]["anho"].tolist())
-    anhos_nuevos     = sorted(anhos_wb - anhos_existentes)
-
-    if not anhos_nuevos:
-        print("Sin datos nuevos en World Bank para agregar.")
-        return
-
-    print(f"Anhos nuevos a agregar: {anhos_nuevos}")
-    filas_nuevas = []
-
-    for anho in anhos_nuevos:
-        crecimiento = df_wb[df_wb["anho"] == anho]["crecimiento"].iloc[0]
-
-        # Estimar pib_billones_cop extrapolando desde el ultimo valor conocido
-        ultimo = df_pib.dropna(subset=["pib_billones_cop"]).iloc[-1]
-        pib_base = float(ultimo["pib_billones_cop"])
-        factor   = 1 + crecimiento / 100
-
-        for trim, mes in TRIMESTRE_MES.items():
-            pib_estimado = round(pib_base * (factor ** 0.25), 1)
-            filas_nuevas.append({
-                "fecha":               f"{anho}-{mes:02d}-01",
-                "pib_billones_cop":    pib_estimado,
-                "trimestre":           f"{trim} {anho}",
-                "pib_crecimiento_yoy": crecimiento,
-            })
-            pib_base = pib_estimado
-
-    df_nuevos = pd.DataFrame(filas_nuevas)
-    df_nuevos["fecha"] = pd.to_datetime(df_nuevos["fecha"])
-
-    df_total = (pd.concat([df_pib, df_nuevos])
-                  .drop_duplicates("fecha")
-                  .sort_values("fecha")
-                  .reset_index(drop=True))
-
-    df_total.to_csv(CSV_PIB, index=False)
-    print(f"OK - CSV actualizado: {len(df_total)} filas -> {CSV_PIB}")
-    print(f"     NOTA: valores World Bank son anuales distribuidos en 4 trimestres (aproximacion).")
-    print(f"     Para datos exactos usa --trimestre con cifras de DANE.")
+        if sheet_name not in wb.sheetnames:
+            raise ValueError(f"No existe {sheet_name} en el anexo")
+        rows = list(wb[sheet_name].values)
+        if "producto interno bruto" not in str(rows[4][0]).lower():
+            raise ValueError("El anexo no parece ser PIB")
+        expected = "originales" if sheet_name == "Cuadro 1" else "ajustados"
+        if expected not in str(rows[7][0]).lower():
+            raise ValueError(f"{sheet_name} ya no contiene datos {expected}")
+        candidates = [
+            r for r in rows
+            if str(r[0]).strip() == "B.1b"
+            and str(r[2]).strip().lower() == "producto interno bruto"
+            and sum(isinstance(v, (int, float)) for v in r[3:]) > 30
+            and isinstance(r[3], (int, float)) and r[3] > 1000
+        ]
+        if len(candidates) != 1:
+            raise ValueError(f"Fila de niveles PIB ambigua: {len(candidates)}")
+        years, quarters, values = rows[11], rows[12], candidates[0]
+        output = {}
+        year = None
+        for col in range(3, min(len(years), len(quarters), len(values))):
+            year_match = re.match(r"^(20\d{2}|19\d{2})(?:p|pr)?$", str(years[col]).strip())
+            if year_match:
+                year = int(year_match.group(1))
+            quarter = str(quarters[col]).strip()
+            value = values[col]
+            if quarter not in QUARTERS or not isinstance(value, (int, float)):
+                continue
+            if year is None or value <= 0:
+                raise ValueError("Fecha o nivel PIB invalido")
+            output[pd.Timestamp(year, QUARTERS[quarter], 1)] = float(value)
+        if len(output) < 60:
+            raise ValueError(f"Historia PIB demasiado corta: {len(output)} trimestres")
+        return pd.Series(output, dtype="float64").sort_index()
+    finally:
+        wb.close()
 
 
-# ── 2. ACTUALIZACION MANUAL — DANE ───────────────────────────
-
-def agregar_trimestre_dane(trimestre: str, valor_cop: float, crecimiento: float):
-    """
-    Agrega un trimestre nuevo con datos exactos de DANE.
-    Ejemplo: agregar_trimestre_dane("T2 2026", 408.3, 3.84)
-
-    Como obtener los valores:
-      1. Ir a dane.gov.co -> Estadisticas -> Cuentas Nacionales Trimestrales
-      2. Descargar el ultimo boletin (Excel o PDF)
-      3. Buscar el PIB a precios corrientes (billones COP) y el crecimiento YoY
-    """
-    try:
-        partes = trimestre.strip().split()
-        if len(partes) != 2 or partes[0] not in TRIMESTRE_MES:
-            print(f"ERROR: Formato incorrecto. Usa 'T1 2026', 'T2 2026', etc.")
-            return
-
-        trim_cod = partes[0]
-        anho     = int(partes[1])
-        mes      = TRIMESTRE_MES[trim_cod]
-        fecha    = pd.Timestamp(f"{anho}-{mes:02d}-01")
-
-        df_pib = pd.read_csv(CSV_PIB, parse_dates=["fecha"])
-
-        if fecha in df_pib["fecha"].values:
-            # Actualizar fila existente con datos DANE (mas precisos)
-            idx = df_pib[df_pib["fecha"] == fecha].index[0]
-            df_pib.loc[idx, "pib_billones_cop"]    = valor_cop
-            df_pib.loc[idx, "pib_crecimiento_yoy"] = crecimiento
-            df_pib.loc[idx, "trimestre"]            = trimestre
-            print(f"Fila existente actualizada con datos DANE: {trimestre}")
-        else:
-            # Agregar fila nueva
-            nueva = pd.DataFrame([{
-                "fecha":               fecha,
-                "pib_billones_cop":    valor_cop,
-                "trimestre":           trimestre,
-                "pib_crecimiento_yoy": crecimiento,
-            }])
-            df_pib = (pd.concat([df_pib, nueva])
-                        .sort_values("fecha")
-                        .reset_index(drop=True))
-            print(f"Trimestre nuevo agregado: {trimestre}")
-
-        df_pib.to_csv(CSV_PIB, index=False)
-        print(f"OK - Guardado en {CSV_PIB}")
-        print(f"     {trimestre}: PIB={valor_cop} billones COP | Crecimiento={crecimiento}% YoY")
-
-    except Exception as e:
-        print(f"ERROR: {e}")
+def build_table(real_original, real_adjusted, nominal, publication, source_url):
+    if not real_original.index.equals(real_adjusted.index) or not real_original.index.equals(nominal.index):
+        raise ValueError("Los anexos PIB no cubren los mismos trimestres")
+    expected = pd.date_range(real_original.index.min(), real_original.index.max(), freq="QS")
+    if not real_original.index.equals(expected):
+        raise ValueError("Faltan trimestres en el PIB")
+    df = pd.DataFrame({
+        "pib_real_miles_millones_ref2015": real_original,
+        "pib_real_ajustado_miles_millones_ref2015": real_adjusted,
+        "pib_nominal_billones_cop": nominal / 1000,
+    })
+    df["pib_real_yoy"] = real_original.pct_change(4, fill_method=None) * 100
+    df["pib_real_qoq_sa"] = real_adjusted.pct_change(1, fill_method=None) * 100
+    df["pib_nominal_yoy"] = nominal.pct_change(4, fill_method=None) * 100
+    if df.index.max() > pd.Timestamp.today().normalize():
+        raise ValueError("El anexo incluye trimestres futuros")
+    if (df["pib_real_yoy"].abs() > 40).any() or (df["pib_real_qoq_sa"].abs() > 30).any():
+        raise ValueError("Crecimiento PIB fuera de rango de control")
+    df = df.loc["2009-01-01":].copy()
+    df.insert(0, "fecha", df.index.strftime("%Y-%m-%d"))
+    df.insert(1, "trimestre", [f"T{d.quarter} {d.year}" for d in df.index])
+    df["fecha_publicacion_vintage"] = publication.strftime("%Y-%m-%d")
+    df["fuente"] = source_url
+    df["estado_dato"] = "DANE_publicado_sujeto_a_revision"
+    return df.reset_index(drop=True)
 
 
-# ── 3. MOSTRAR ESTADO ACTUAL ──────────────────────────────────
+def update(session=None):
+    session = session or requests.Session()
+    response = session.get(DANE_PAGE, timeout=40)
+    response.raise_for_status()
+    links = annex_links(response.text)
+    content = {}
+    for kind, (url, _) in links.items():
+        response = session.get(url, timeout=90)
+        response.raise_for_status()
+        content[kind] = response.content
+    real = read_pib_levels(content["real"], "Cuadro 1")
+    adjusted = read_pib_levels(content["real"], "Cuadro 4")
+    nominal = read_pib_levels(content["nominal"], "Cuadro 1")
+    table = build_table(real, adjusted, nominal, links["real"][1], links["real"][0])
+    name_match = re.search(r"-(I{1,3}|IV)trim(20\d{2})\.xlsx$", links["real"][0], re.I)
+    if name_match:
+        expected_last = pd.Timestamp(int(name_match.group(2)), QUARTERS[name_match.group(1).upper()], 1)
+        if pd.Timestamp(table.iloc[-1]["fecha"]) != expected_last:
+            raise ValueError("El ultimo trimestre del anexo no coincide con su nombre")
+    if CSV_PIB.exists():
+        old = pd.read_csv(CSV_PIB)
+        new = pd.read_csv(io.StringIO(table.to_csv(index=False, float_format="%.8f")))
+        if old.equals(new):
+            print("PIB: sin cambios")
+            return table
+    table.to_csv(CSV_PIB, index=False, float_format="%.8f")
+    print(f"PIB DANE: {len(table)} trimestres hasta {table.iloc[-1]['trimestre']}; publicado {links['real'][1].date()}")
+    return table
 
-def mostrar_estado():
-    df = pd.read_csv(CSV_PIB, parse_dates=["fecha"])
-    print("\n" + "="*55)
-    print("  Estado actual del PIB Colombia")
-    print("="*55)
-    print(f"  Total filas    : {len(df)}")
-    print(f"  Primer dato    : {df['trimestre'].iloc[0]}")
-    print(f"  Ultimo dato    : {df['trimestre'].iloc[-1]}")
-    print(f"  Ultimo PIB     : {df['pib_billones_cop'].iloc[-1]:.1f} billones COP")
-    print(f"  Ultimo crec.   : {df['pib_crecimiento_yoy'].iloc[-1]:.2f}% YoY")
-    print("="*55)
-    print("\nUltimos 6 trimestres:")
-    print(df[["trimestre","pib_billones_cop","pib_crecimiento_yoy"]].tail(6).to_string(index=False))
-
-
-# ── Main ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Actualiza pib_colombia.csv",
-        formatter_class=argparse.RawTextHelpFormatter,
-        epilog="""
-Ejemplos:
-  Actualizacion automatica (World Bank):
-    python actualizar_pib.py
-
-  Agregar trimestre con datos exactos de DANE:
-    python actualizar_pib.py --trimestre "T2 2026" --valor 408.3 --crecimiento 3.84
-
-  Ver estado actual:
-    python actualizar_pib.py --estado
-        """
-    )
-    parser.add_argument("--trimestre",   type=str,   help="Ej: 'T2 2026'")
-    parser.add_argument("--valor",       type=float, help="PIB en billones COP (de DANE)")
-    parser.add_argument("--crecimiento", type=float, help="Crecimiento YoY en %% (de DANE)")
-    parser.add_argument("--estado",      action="store_true", help="Mostrar resumen actual")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--estado", action="store_true", help="Mostrar tabla existente")
     args = parser.parse_args()
-
-    print("\n" + "="*55)
-    print("  Actualizador PIB Colombia")
-    print("="*55)
-
     if args.estado:
-        mostrar_estado()
-
-    elif args.trimestre:
-        if args.valor is None or args.crecimiento is None:
-            print("ERROR: Con --trimestre debes proveer tambien --valor y --crecimiento")
-            print("Ejemplo: python actualizar_pib.py --trimestre 'T2 2026' --valor 408.3 --crecimiento 3.84")
-            sys.exit(1)
-        agregar_trimestre_dane(args.trimestre, args.valor, args.crecimiento)
-        mostrar_estado()
-
+        print(pd.read_csv(CSV_PIB).tail(8).to_string(index=False))
     else:
-        # Modo por defecto: actualizacion automatica con World Bank
-        actualizar_desde_worldbank()
-        mostrar_estado()
-
-    print()
+        update()

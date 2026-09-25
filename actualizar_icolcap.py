@@ -6,7 +6,7 @@ Descarga automaticamente desde BlackRock usando Playwright (Chrome real):
 
 Uso:
   python actualizar_icolcap.py                        # Playwright (automatico)
-  python actualizar_icolcap.py --reconstruir          # + reconstruye indices
+  python actualizar_icolcap.py --reconstruir          # + audita canastas mensuales
   python actualizar_icolcap.py --composicion ruta.xls # PCF manual descargado
 """
 
@@ -255,7 +255,7 @@ Ejemplos:
     parser.add_argument("--composicion", type=str,
                         help="Ruta al Excel PCF descargado manualmente de BlackRock")
     parser.add_argument("--reconstruir", action="store_true",
-                        help="Reconstruir indices_colombia.csv al finalizar")
+                        help="Reconstruir tabla mensual experimental al finalizar")
     args = parser.parse_args()
 
     sep = "=" * 55

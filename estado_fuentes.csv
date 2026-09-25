@@ -1,0 +1,6 @@
+fuente,archivo,frecuencia,ultima_observacion,ultima_publicacion_o_corte,estado
+PIB real DANE,pib_colombia.csv,trimestral,2026-04-01,2026-08-18,vigente
+IPC DANE/BanRep,inflacion_clean.csv,mensual,2026-08-01,2026-09-07,vigente
+TES BanRep,tasas_interes_clean.csv,diaria_mercado,2026-09-18,2026-09-18,vigente
+COLCAP BanRep/BVC,colcap_oficial.csv,diaria_mercado,2026-09-24,2026-09-24,vigente
+Canastas experimentales,indices_experimentales_mensuales.csv,mensual,2026-04-01,2026-04-01,rezagado

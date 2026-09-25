@@ -17,8 +17,12 @@ Uso:
 """
 
 import os, sys, argparse, datetime
+from pathlib import Path
 import requests
 import pandas as pd
+import truststore
+
+truststore.inject_into_ssl()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_TES  = os.path.join(BASE_DIR, "tasas_interes_clean.csv")
@@ -55,16 +59,19 @@ def descargar_serie(nombre_col: str, id_serie: int) -> pd.DataFrame:
     try:
         r = requests.get(url, headers=HEADERS, timeout=30)
         r.raise_for_status()
-        data = r.json()[0]["data"]  # lista de [timestamp_ms, valor]
+        payload = r.json()[0]
+        data = payload["data"]
+        if str(id_serie) != str(payload.get("id")):
+            raise ValueError("BanRep devolvio otra serie TES")
 
         filas = []
         for ts_ms, valor in data:
             # Los timestamps son medianoche hora Colombia (UTC-5)
             # Convertir a fecha local: ts_ms / 1000 da segundos UTC
-            fecha = datetime.datetime.fromtimestamp(
-                ts_ms / 1000, tz=datetime.timezone.utc
-            ).date()
-            filas.append({"fecha": fecha, "valor": valor})
+            fecha = (datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+                     + datetime.timedelta(seconds=ts_ms / 1000)).date()
+            if valor is not None and fecha <= datetime.datetime.now().date():
+                filas.append({"fecha": fecha, "valor": valor})
 
         df = pd.DataFrame(filas)
         df["fecha"] = pd.to_datetime(df["fecha"])
@@ -78,15 +85,14 @@ def descargar_serie(nombre_col: str, id_serie: int) -> pd.DataFrame:
 
 def actualizar_tes():
     """
-    Descarga las 6 series de BanRep y agrega al CSV las fechas
-    que no existan todavia.
+    Descarga las series y actualiza observaciones revisadas por BanRep.
     """
     # Leer CSV existente
     df_exist = pd.read_csv(CSV_TES, parse_dates=["fecha"])
     ultima_fecha = df_exist["fecha"].max()
     print(f"CSV actual: {len(df_exist)} filas, ultimo dia: {ultima_fecha.date()}")
 
-    # Descargar cada serie y quedarse solo con fechas nuevas
+    # Descargar la historia para captar revisiones.
     print("\nDescargando series de BanRep...")
     dfs_nuevos = {}
     for col, id_serie in SERIES.items():
@@ -95,17 +101,15 @@ def actualizar_tes():
         if df_serie.empty:
             continue
         ultimo_api = df_serie["fecha"].max()
-        df_nuevos = df_serie[df_serie["fecha"] > ultima_fecha].copy()
-        print(f"OK ({len(df_serie)} puntos hasta {ultimo_api.date()}, {len(df_nuevos)} nuevos)")
-        dfs_nuevos[col] = df_nuevos
+        print(f"OK ({len(df_serie)} puntos hasta {ultimo_api.date()})")
+        dfs_nuevos[col] = df_serie
 
-    if not dfs_nuevos:
-        print("\nSin datos nuevos para agregar.")
-        return
+    if not all(col in dfs_nuevos for col in ("tes_pesos_1y", "tes_pesos_5y", "tes_pesos_10y")):
+        raise ValueError("Falta una serie TES pesos obligatoria")
 
     # Merge de las 6 series nuevas por fecha
     cols = list(SERIES.keys())
-    df_merge = dfs_nuevos.get(cols[0], pd.DataFrame(columns=["fecha"]))
+    df_merge = dfs_nuevos[cols[0]]
     for col in cols[1:]:
         if col in dfs_nuevos:
             df_merge = pd.merge(df_merge, dfs_nuevos[col], on="fecha", how="outer")
@@ -118,17 +122,22 @@ def actualizar_tes():
         print("\nSin datos nuevos para agregar.")
         return
 
-    # Concatenar con el CSV existente
-    df_total = (
-        pd.concat([df_exist, df_merge])
-        .drop_duplicates("fecha")
-        .sort_values("fecha")
-        .reset_index(drop=True)
-    )
-
-    df_total.to_csv(CSV_TES, index=False)
-    print(f"\nOK - {len(df_merge)} dias nuevos agregados.")
-    print(f"     CSV actualizado: {len(df_total)} filas en total -> {CSV_TES}")
+    if df_merge["fecha"].max() < ultima_fecha:
+        raise ValueError("TES API mas antiguo que el CSV")
+    old = df_exist.set_index("fecha")
+    new = df_merge.set_index("fecha")
+    old.update(new)
+    df_total = new.combine_first(old).sort_index().reset_index()
+    for col in ("tes_pesos_1y", "tes_pesos_5y", "tes_pesos_10y"):
+        if df_total[col].isna().any() or not df_total[col].between(-5, 40).all():
+            raise ValueError(f"TES invalido en {col}")
+    csv_text = df_total.to_csv(index=False, lineterminator="\n")
+    if Path(CSV_TES).read_text(encoding="utf-8") != csv_text:
+        with Path(CSV_TES).open("w", encoding="utf-8", newline="") as target:
+            target.write(csv_text)
+        print(f"OK - TES actualizado: {len(df_total)} dias hasta {df_total['fecha'].max().date()}")
+    else:
+        print("Sin cambios de TES")
 
 
 def mostrar_estado():

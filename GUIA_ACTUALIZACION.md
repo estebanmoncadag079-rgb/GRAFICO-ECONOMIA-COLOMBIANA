@@ -1,37 +1,27 @@
-# Guía de Actualización — Dashboard Financiero Colombia
+# Guia de actualizacion
 
-## Actualización automática
+La actualizacion de las cuatro fuentes oficiales se ejecuta diariamente
+en GitHub Actions a las 19:30 hora de Colombia una vez que el workflow
+este fusionado en `main`. El servicio de Render carga los CSV del commit
+desplegado.
 
-Todos los datos se actualizan solos **cada lunes a las 7:00 AM** (Task Scheduler).
-No se requiere ninguna acción.
+Para ejecutarla en este equipo:
 
-Para forzar una actualización manual en cualquier momento:
-```
+```bash
+python -m pip install -r requirements-update.txt
 python actualizar_todo.py
+python validar_datos.py
 ```
 
----
+Para revisar el dashboard: `python dashboard_colombia.py` y abrir
+`http://127.0.0.1:8050`.
 
-## Lo único verdaderamente manual
+El PIB real se descarga automaticamente de los anexos DANE; no hay que
+repartir valores anuales ni ingresar crecimientos manualmente. La fuente
+oficial COLCAP tampoco requiere descarga manual. La tabla de canastas
+accionarias sigue siendo experimental y necesita precios historicos
+ajustados y pesos fechados para poder validarse.
 
-### PIB Colombia — datos exactos de DANE (opcional, trimestral)
-
-El PIB se actualiza automáticamente desde World Bank (aproximado).
-Si quieres los datos exactos de DANE:
-
-1. Entra a **dane.gov.co** → Estadísticas → Cuentas Nacionales Trimestrales
-2. Busca el PIB a precios corrientes (billones COP) y el crecimiento YoY (%)
-3. Corre:
-```
-python actualizar_pib.py --trimestre "T2 2026" --valor 408.3 --crecimiento 3.84
-```
-
----
-
-## Ver el dashboard
-
-```
-python dashboard_colombia.py
-```
-
-Abre: **http://127.0.0.1:8050** — para cerrar: `Ctrl+C`
+Ver [OPERACION_DATOS.md](OPERACION_DATOS.md) para configurar GitHub y
+Render, y [DATA_DICTIONARY.md](DATA_DICTIONARY.md) para interpretar las
+cifras.

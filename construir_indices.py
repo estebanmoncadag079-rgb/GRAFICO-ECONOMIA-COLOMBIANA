@@ -1,5 +1,8 @@
 """
 construir_indices.py
+AVISO: la reconstruccion diaria descrita abajo es historica y ya no se publica.
+Al ejecutarse se genera la tabla mensual experimental; el dashboard usa la
+serie COLCAP oficial de BanRep.
 Reconstruye los indices sintetico y grandes desde el origen usando precios
 mensuales limpios de ACCIONES_HISTORICAS_ICOLCAP.xlsx.
 
@@ -26,7 +29,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # ── Rutas ────────────────────────────────────────────────────
-DIR_GRAF      = Path(r"c:\Users\USUARIO\OneDrive\Desktop\GRAFICO_DATOS LIMPIOS")
+DIR_GRAF      = Path(__file__).resolve().parent
 CSV_PRECIOS   = DIR_GRAF / "precios_icolcap_limpios.csv"
 CSV_BLACKROCK = DIR_GRAF / "datos_colombia_clean.csv"
 CSV_REF_IC    = DIR_GRAF / "icolcap_referencia.csv"
@@ -397,4 +400,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from construir_tablas_experimentales import main as build_monthly_table
+    build_monthly_table()
