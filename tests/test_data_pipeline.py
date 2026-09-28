@@ -1,13 +1,36 @@
 import unittest
+import hashlib
+import ssl
+from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pandas as pd
 
+from actualizar_tes import INTERMEDIATE_CERT, banrep_ca_bundle, descargar_serie
 from actualizar_pib import build_table
 from construir_tablas_experimentales import calculate
 from validar_datos import isolated_tes_spikes
 
 
 class DataPipelineTests(unittest.TestCase):
+    def test_tes_ca_bundle_completes_verified_chain(self):
+        certificate = INTERMEDIATE_CERT.read_text(encoding="ascii")
+        fingerprint = hashlib.sha256(ssl.PEM_cert_to_DER_cert(certificate)).hexdigest()
+        self.assertEqual(fingerprint, "2d140f20b8a96e2b4d2f1cc5aca5e5a1e7dc56a7491e510906960f38d2d21aef")
+        with banrep_ca_bundle() as bundle:
+            contents = Path(bundle).read_text(encoding="ascii")
+            self.assertIn(certificate.strip(), contents)
+            self.assertGreater(contents.count("-----BEGIN CERTIFICATE-----"), 100)
+        self.assertFalse(Path(bundle).exists())
+
+    def test_tes_request_uses_ca_bundle(self):
+        response = Mock()
+        response.json.return_value = [{"id": 15272, "data": [[1726617600000, 12.38]]}]
+        with patch("actualizar_tes.requests.get", return_value=response) as get:
+            result = descargar_serie("tes_pesos_1y", 15272, "verified-bundle.pem")
+        self.assertEqual(result.iloc[0]["tes_pesos_1y"], 12.38)
+        self.assertEqual(get.call_args.kwargs["verify"], "verified-bundle.pem")
+
     def test_real_and_nominal_growth_are_distinct(self):
         dates = pd.date_range("2023-01-01", periods=9, freq="QS")
         real = pd.Series([100, 100, 100, 100, 110, 110, 110, 110, 121], index=dates)

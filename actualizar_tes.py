@@ -16,16 +16,15 @@ Uso:
   python actualizar_tes.py --estado  # Muestra resumen actual
 """
 
-import os, sys, argparse, datetime
+import os, sys, argparse, datetime, tempfile
+from contextlib import contextmanager
 from pathlib import Path
 import requests
 import pandas as pd
-import truststore
-
-truststore.inject_into_ssl()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_TES  = os.path.join(BASE_DIR, "tasas_interes_clean.csv")
+INTERMEDIATE_CERT = Path(BASE_DIR) / "certs" / "GeoTrustEVRSACAG2.pem"
 
 API_BASE = (
     "https://suameca.banrep.gov.co"
@@ -50,14 +49,26 @@ SERIES = {
 }
 
 
-def descargar_serie(nombre_col: str, id_serie: int) -> pd.DataFrame:
+@contextmanager
+def banrep_ca_bundle():
+    # BanRep currently serves its leaf and root certificates, but omits this
+    # DigiCert intermediate. Keep the normal trusted roots and complete the chain.
+    roots = Path(requests.certs.where()).read_bytes()
+    intermediate = INTERMEDIATE_CERT.read_bytes()
+    with tempfile.TemporaryDirectory() as directory:
+        bundle = Path(directory) / "banrep-ca-bundle.pem"
+        bundle.write_bytes(roots.rstrip() + b"\n" + intermediate)
+        yield str(bundle)
+
+
+def descargar_serie(nombre_col: str, id_serie: int, verify_bundle: str) -> pd.DataFrame:
     """
     Descarga toda la serie historica de BanRep y la retorna como DataFrame
     con columnas: fecha, <nombre_col>
     """
     url = f"{API_BASE}?idSerie={id_serie}"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=30)
+        r = requests.get(url, headers=HEADERS, timeout=30, verify=verify_bundle)
         r.raise_for_status()
         payload = r.json()[0]
         data = payload["data"]
@@ -95,14 +106,15 @@ def actualizar_tes():
     # Descargar la historia para captar revisiones.
     print("\nDescargando series de BanRep...")
     dfs_nuevos = {}
-    for col, id_serie in SERIES.items():
-        print(f"  {col} (ID {id_serie})...", end=" ")
-        df_serie = descargar_serie(col, id_serie)
-        if df_serie.empty:
-            continue
-        ultimo_api = df_serie["fecha"].max()
-        print(f"OK ({len(df_serie)} puntos hasta {ultimo_api.date()})")
-        dfs_nuevos[col] = df_serie
+    with banrep_ca_bundle() as verify_bundle:
+        for col, id_serie in SERIES.items():
+            print(f"  {col} (ID {id_serie})...", end=" ")
+            df_serie = descargar_serie(col, id_serie, verify_bundle)
+            if df_serie.empty:
+                continue
+            ultimo_api = df_serie["fecha"].max()
+            print(f"OK ({len(df_serie)} puntos hasta {ultimo_api.date()})")
+            dfs_nuevos[col] = df_serie
 
     if not all(col in dfs_nuevos for col in ("tes_pesos_1y", "tes_pesos_5y", "tes_pesos_10y")):
         raise ValueError("Falta una serie TES pesos obligatoria")
