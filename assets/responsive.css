@@ -5,17 +5,64 @@
 .panel-explainer {
   box-sizing: border-box;
   width: 100%;
-  margin: 10px 0 22px;
-  padding: 18px 20px;
+  margin: 8px 0 12px;
   border: 1px solid var(--description-border, #b8c9cf);
   border-left: 4px solid var(--description-accent, #0f766e);
   border-radius: 6px;
   background: var(--description-background, #ffffff);
   color: #25343b;
-  font-size: 15px;
-  line-height: 1.65;
   letter-spacing: 0;
   overflow-wrap: anywhere;
+}
+
+.panel-explainer summary {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  color: #25343b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.panel-explainer summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-explainer summary:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.panel-explainer summary:focus-visible {
+  outline: 2px solid var(--description-accent, #0f766e);
+  outline-offset: 2px;
+}
+
+.panel-explainer__chevron {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-right: 2px solid var(--description-accent, #0f766e);
+  border-bottom: 2px solid var(--description-accent, #0f766e);
+  transform: rotate(45deg) translate(-2px, 2px);
+  transition: transform 160ms ease;
+}
+
+.panel-explainer[open] .panel-explainer__chevron {
+  transform: rotate(225deg) translate(-2px, 2px);
+}
+
+.panel-explainer__content {
+  padding: 4px 18px 16px;
+  border-top: 1px solid var(--description-border, #b8c9cf);
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 .panel-explainer--market {
@@ -42,10 +89,10 @@
   --description-accent: #258675;
 }
 
-.panel-explainer p {
+.panel-explainer__content p {
   width: 100%;
   max-width: none;
-  margin: 0;
+  margin: 12px 0 0;
 }
 
 .help-label {

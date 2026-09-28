@@ -499,9 +499,14 @@ def chart_description(title, text):
         "Inflación y PIB: precios y actividad": "macro",
         "TES: tasas de la deuda pública": "rates",
     }[title]
-    return html.Section([
-        html.P(text),
-    ], className=f"panel-explainer panel-explainer--{tone}", **{"aria-label": title})
+    return html.Details([
+        html.Summary([
+            html.Span("Descripción del gráfico"),
+            html.Span(className="panel-explainer__chevron", **{"aria-hidden": "true"}),
+        ]),
+        html.Div(html.P(text), className="panel-explainer__content"),
+    ], open=False, className=f"panel-explainer panel-explainer--{tone}",
+       **{"aria-label": title})
 
 
 def chart_readout(chart_id):

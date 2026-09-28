@@ -6,6 +6,15 @@ import dashboard_colombia as dashboard
 
 
 class EconomicChartTests(unittest.TestCase):
+    def test_chart_descriptions_are_collapsed_disclosures(self):
+        description = dashboard.chart_description(
+            "Inflación y PIB: precios y actividad", "Texto de prueba")
+        self.assertEqual(description.__class__.__name__, "Details")
+        self.assertFalse(description.open)
+        self.assertEqual(description.children[0].__class__.__name__, "Summary")
+        self.assertEqual(description.children[0].children[0].children,
+                         "Descripción del gráfico")
+
     def test_quarterly_gdp_uses_end_of_reference_period(self):
         figure = dashboard.make_fig_inflacion(dashboard.df_daily)
         gdp = next(trace for trace in figure.data if trace.meta["frequency"] == "quarterly")
