@@ -22,6 +22,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from dash import Dash, Input, Output, State, ClientsideFunction, dcc, html, ctx, no_update
 from plotly.subplots import make_subplots
+from ciclo_economico import REGIMES, quarterly_cycle
 from validar_datos import isolated_tes_spikes
 
 # ══════════════════════════════════════════════════════════
@@ -563,27 +564,11 @@ def latest_story_values():
     tes = df_tes.dropna(subset=["tes_pesos_1y","tes_pesos_10y"]).iloc[-1]
     colcap = df_colcap.dropna(subset=["colcap_puntos"]).iloc[-1]
 
-    inf_prev = df_inf.dropna(subset=["inflacion_anual"]).iloc[-4] if len(df_inf.dropna(subset=["inflacion_anual"])) >= 4 else inf
-    pib_prev = df_pib.dropna(subset=["pib_real_yoy"]).iloc[-2] if len(df_pib.dropna(subset=["pib_real_yoy"])) >= 2 else pib
-    inf_delta = float(inf["inflacion_anual"] - inf_prev["inflacion_anual"])
-    pib_delta = float(pib["pib_real_yoy"] - pib_prev["pib_real_yoy"])
-
-    if pib_delta >= 0 and inf_delta < 0:
-        phase = "Recuperacion posible"
-        phase_note = "PIB mejora mientras la inflacion cede: terreno favorable para revisar renta variable."
-        phase_color = C_VERDE
-    elif pib_delta >= 0 and inf_delta >= 0:
-        phase = "Expansion con presion"
-        phase_note = "Actividad e inflacion avanzan juntas: conviene vigilar si la inflacion empieza a dominar."
-        phase_color = C_AMARILLO
-    elif pib_delta < 0 and inf_delta >= 0:
-        phase = "Auge tensionado"
-        phase_note = "La actividad pierde fuerza con inflacion al alza: senal de cautela para activos de riesgo."
-        phase_color = C_ROJO
-    else:
-        phase = "Enfriamiento"
-        phase_note = "PIB e inflacion pierden traccion: la lectura se acerca a una fase defensiva."
-        phase_color = C_AZUL
+    cycle_row = CYCLE.iloc[-1]
+    phase, phase_color = REGIMES[cycle_row["regime"]]
+    phase_note = (f"Estimación T{cycle_row['quarter'].quarter} {cycle_row['quarter'].year}: "
+                  f"impulso PIB {cycle_row['growth_change_pp']:+.2f} pp; "
+                  f"inflación {cycle_row['inflation_change_pp']:+.2f} pp.")
 
     spread = float(tes["tes_pesos_10y"] - tes["tes_pesos_1y"])
     return {
@@ -600,7 +585,44 @@ def latest_story_values():
         "colcap_date": fecha_es(colcap["fecha"]),
     }
 
+CYCLE = quarterly_cycle(df_pib, df_inf)
+CURRENT_CYCLE = CYCLE.iloc[-1]
 STORY = latest_story_values()
+
+
+def make_cycle_fig(window="6A"):
+    history = CYCLE
+    if window == "6A":
+        history = history[history["quarter_end"] >= history["quarter_end"].max() - pd.DateOffset(years=6)]
+    labels = [f"T{p.quarter} {p.year}" for p in history["quarter"]]
+    hover = [
+        f"<b>{period} · {REGIMES[regime][0]}</b><br>PIB real interanual: {growth:.2f}% "
+        f"({growth_change:+.2f} pp vs. trimestre anterior)<br>IPC anual: {inflation:.2f}% "
+        f"({inflation_change:+.2f} pp vs. trimestre anterior)"
+        for period, regime, growth, growth_change, inflation, inflation_change in zip(
+            labels, history["regime"], history["pib_real_yoy"], history["growth_change_pp"],
+            history["inflacion_anual"], history["inflation_change_pp"])
+    ]
+    fig = go.Figure(go.Scatter(
+        x=history["quarter_end"], y=history["pib_real_yoy"], mode="lines+markers",
+        line={"color": "#334155", "width": 2},
+        marker={"color": [REGIMES[r][1] for r in history["regime"]], "size": 9,
+                "line": {"color": "#ffffff", "width": 1}},
+        text=hover, hovertemplate="%{text}<extra></extra>", name="PIB real interanual",
+    ))
+    fig.add_hline(y=0, line_color="#94a3b8", line_width=1)
+    fig.update_layout(
+        height=300, margin=dict(l=48, r=12, t=18, b=42), showlegend=False,
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, Segoe UI, Arial, sans-serif", size=11, color=TEXT),
+        hoverlabel=dict(bgcolor="#ffffff", font_size=12, font_color=TEXT),
+        uirevision=window,
+    )
+    fig.update_xaxes(title_text="Trimestre", tickformat="%Y", showgrid=False,
+                     showline=True, linecolor="#64748b", ticks="outside", tickcolor="#64748b")
+    fig.update_yaxes(title_text="PIB real anual (%)", ticksuffix="%", showgrid=False,
+                     showline=True, linecolor="#64748b", ticks="outside", tickcolor="#64748b")
+    return fig
 
 # ══════════════════════════════════════════════════════════
 # 8. LAYOUT
@@ -883,7 +905,7 @@ app.layout = html.Div([
             dcc.Graph(id="chart-tes", clear_on_unhover=False, config=CHART_CONFIG,
                 style={"marginBottom":"4px"}),
 
-        ], className="dashboard-main", style={"width":"72%","background":BG_PANEL,
+        ], className="dashboard-main", style={"width":"64%","background":BG_PANEL,
                   "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"10px"}),
 
         # ── PANEL DERECHO ────────────────────────────────
@@ -937,6 +959,74 @@ app.layout = html.Div([
 
             html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
 
+            html.Section([
+                html.H2("CICLO ECONÓMICO", className="cycle-title"),
+                html.P("Estimación con PIB real e inflación anual al cierre de cada trimestre.",
+                       className="cycle-intro"),
+                html.Div([
+                    html.Span(f"T{CURRENT_CYCLE['quarter'].quarter} {CURRENT_CYCLE['quarter'].year}",
+                              className="cycle-period"),
+                    html.Strong(STORY["phase"], className="cycle-current-name"),
+                ], className="cycle-current", style={"--cycle-color": STORY["phase_color"]}),
+                html.Div([
+                    html.Div([
+                        html.Span(f"PIB real · T{CURRENT_CYCLE['quarter'].quarter} {CURRENT_CYCLE['quarter'].year}"),
+                        html.Strong(f"{CURRENT_CYCLE['pib_real_yoy']:.2f} %"),
+                        html.Small(f"Impulso {CURRENT_CYCLE['growth_change_pp']:+.2f} pp"),
+                    ]),
+                    html.Div([
+                        html.Span(f"IPC anual · {mes_es(CURRENT_CYCLE['quarter_end'])}"),
+                        html.Strong(f"{CURRENT_CYCLE['inflacion_anual']:.2f} %"),
+                        html.Small(f"Cambio {CURRENT_CYCLE['inflation_change_pp']:+.2f} pp"),
+                    ]),
+                ], className="cycle-evidence"),
+                html.Div([
+                    html.Div("", className="cycle-grid-corner"),
+                    html.Div("PIB pierde impulso", className="cycle-axis-label"),
+                    html.Div("PIB gana impulso", className="cycle-axis-label"),
+                    html.Div("IPC acelera", className="cycle-axis-label cycle-row-label"),
+                    *[html.Div([
+                        html.Strong(REGIMES[code][0]),
+                        html.Span("Actual" if CURRENT_CYCLE["regime"] == code else ""),
+                    ], className="cycle-cell" + (" cycle-cell--current" if CURRENT_CYCLE["regime"] == code else ""),
+                        style={"--cycle-color": REGIMES[code][1]})
+                      for code in ("freno_precios", "impulso_precios")],
+                    html.Div("IPC cede", className="cycle-axis-label cycle-row-label"),
+                    *[html.Div([
+                        html.Strong(REGIMES[code][0]),
+                        html.Span("Actual" if CURRENT_CYCLE["regime"] == code else ""),
+                    ], className="cycle-cell" + (" cycle-cell--current" if CURRENT_CYCLE["regime"] == code else ""),
+                        style={"--cycle-color": REGIMES[code][1]})
+                      for code in ("freno_desinflacion", "impulso_desinflacion")],
+                ], className="cycle-grid"),
+                html.Div([
+                    html.H3("Trayectoria del PIB y cambios de régimen", className="cycle-chart-title"),
+                    dcc.RadioItems(id="cycle-window", options=[
+                        {"label": "6 años", "value": "6A"},
+                        {"label": "Todo", "value": "ALL"},
+                    ], value="6A", inline=True, className="cycle-window"),
+                ], className="cycle-chart-head"),
+                dcc.Graph(id="cycle-chart", figure=make_cycle_fig(),
+                          config={"displaylogo": False, "responsive": True,
+                                  "modeBarButtons": [["zoom2d", "pan2d", "resetScale2d"]]},
+                          style={"height": "300px"}),
+                html.P("Cada punto es un trimestre. El color indica la combinación entre el impulso del PIB y la dirección del IPC.",
+                       className="cycle-caption"),
+                html.Details([
+                    html.Summary("Método y fuentes"),
+                    html.P("El impulso del PIB es el cambio, en puntos porcentuales, de su crecimiento real interanual frente al trimestre anterior. La dirección de precios es el cambio de la inflación anual del IPC entre cierres trimestrales. Esta clasificación descriptiva no mide la intensidad del ciclo ni declara recesiones."),
+                    html.P(f"Último trimestre comparable: T{CURRENT_CYCLE['quarter'].quarter} {CURRENT_CYCLE['quarter'].year}. El IPC más reciente es {mes_es(df_inf.iloc[-1]['fecha'])} ({df_inf.iloc[-1]['inflacion_anual']:.2f} %); no se usa para clasificar ese trimestre. Las series pueden ser revisadas por sus fuentes."),
+                    html.P([
+                        "Fuentes: ",
+                        html.A("PIB trimestral DANE", href="https://www.dane.gov.co/index.php/estadisticas-por-tema/cuentas-nacionales/cuentas-nacionales-trimestrales/pib-informacion-tecnica", target="_blank"),
+                        " · ",
+                        html.A("IPC DANE", href="https://www.dane.gov.co/index.php/estadisticas-por-tema/precios-y-costos/indice-de-precios-al-consumidor-ipc/ipc-informacion-tecnica", target="_blank"),
+                    ]),
+                ], className="cycle-method"),
+            ], className="cycle-section"),
+
+            html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
+
             html.Div("Guion rapido para explicarlo",
                      style={"fontSize":"12px","fontWeight":"900","color":TEXT,
                             "marginBottom":"8px"}),
@@ -958,10 +1048,9 @@ app.layout = html.Div([
                 html.Span("Divisas", className="asset-pill"),
             ], style={"display":"flex","gap":"6px","flexWrap":"wrap"}),
 
-        ], className="dashboard-side", style={"width":"28%","background":BG_PANEL,
+        ], className="dashboard-side", style={"width":"36%","background":BG_PANEL,
                   "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"14px",
-                  "display":"flex","flexDirection":"column",
-                  "overflowY":"auto","maxHeight":"1060px"}),
+                  "display":"flex","flexDirection":"column"}),
 
     ], className="dashboard-body", style={"display":"flex","gap":"12px","alignItems":"flex-start"}),
 
@@ -1020,6 +1109,11 @@ for chart_id in [*ALL_CHARTS, "detail-chart"]:
 
 
 # ── Callbacks individuales de cada panel ─────────────────
+@app.callback(Output("cycle-chart", "figure"), Input("cycle-window", "value"))
+def upd_cycle(window):
+    return make_cycle_fig(window)
+
+
 @app.callback(
     Output("chart-bolsa","figure"),
     Input("time-window","value"),

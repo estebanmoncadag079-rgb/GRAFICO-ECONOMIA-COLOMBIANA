@@ -3,9 +3,34 @@ import unittest
 import pandas as pd
 
 import dashboard_colombia as dashboard
+from ciclo_economico import quarterly_cycle
 
 
 class EconomicChartTests(unittest.TestCase):
+    def test_cycle_uses_only_completed_and_matching_quarters(self):
+        gdp = pd.DataFrame({
+            "fecha": pd.to_datetime(["2025-10-01", "2026-01-01", "2026-04-01", "2026-07-01"]),
+            "pib_real_yoy": [2.0, 1.0, 3.0, 4.0],
+        })
+        ipc = pd.DataFrame({
+            "fecha": pd.to_datetime(["2025-12-01", "2026-03-01", "2026-06-01", "2026-08-01"]),
+            "inflacion_anual": [5.0, 5.5, 5.2, 6.0],
+        })
+        cycle = quarterly_cycle(gdp, ipc)
+        self.assertEqual(list(cycle["regime"]), ["freno_precios", "impulso_desinflacion"])
+        self.assertEqual(list(cycle["quarter_end"].dt.strftime("%Y-%m-%d")),
+                         ["2026-03-31", "2026-06-30"])
+        self.assertAlmostEqual(cycle.iloc[-1]["growth_change_pp"], 2.0)
+        self.assertAlmostEqual(cycle.iloc[-1]["inflation_change_pp"], -0.3)
+
+    def test_cycle_current_period_matches_dashboard_story(self):
+        latest = dashboard.CYCLE.iloc[-1]
+        self.assertLessEqual(latest["quarter_end"], pd.Timestamp.now())
+        self.assertEqual(dashboard.STORY["phase"], dashboard.REGIMES[latest["regime"]][0])
+        figure = dashboard.make_cycle_fig()
+        self.assertEqual(pd.Timestamp(figure.data[0].x[-1]), latest["quarter_end"])
+        self.assertIn("IPC anual", figure.data[0].text[-1])
+
     def test_chart_descriptions_are_collapsed_disclosures(self):
         description = dashboard.chart_description(
             "Inflación y PIB: precios y actividad", "Texto de prueba")
