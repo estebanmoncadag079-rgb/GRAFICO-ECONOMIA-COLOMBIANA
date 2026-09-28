@@ -81,8 +81,10 @@ La transicion y la continuidad de niveles estan documentadas en la
 La tabla heredada `indices_colombia.csv` empalma `icolcap_referencia.csv` con
 retornos de BlackRock. La antigua `datos_colombia_clean.csv` salta de escala
 el 2011-07-06. Ninguna se usa para la linea o tarjeta oficial.
-La linea empalmada permanece visible como comparacion diagnostica punteada;
-no se interpreta como una segunda serie oficial del COLCAP.
+La linea empalmada (`icolcap_base100`) se retiro del grafico el 2026-09-25:
+la auditoria encontro indicios de que `icolcap_referencia.csv` esta en otra
+moneda (probable ETF cotizado en dolares) mezclado con retornos en pesos.
+La columna se conserva en el CSV solo como insumo historico.
 
 ## Canastas experimentales
 
@@ -123,7 +125,7 @@ en el proyecto, no una medida de contribucion empresarial al PIB del DANE.
 - El grafico macro conserva puntos mensuales y barras trimestrales en filas
   separadas. No convierte PIB o IPC a datos diarios.
 - El grafico TES usa solo fechas publicadas por BanRep. La linea bursatil
-  oficial usa fechas publicadas de COLCAP; las tres lineas punteadas son
+  oficial usa fechas publicadas de COLCAP; las dos lineas punteadas son
   reconstrucciones historicas separadas. Una fuente rezagada no recorta otra.
 - Las tarjetas muestran la ultima observacion del periodo seleccionado y
   su propia fecha. Las cifras historicas usan la vintage actual; no son una

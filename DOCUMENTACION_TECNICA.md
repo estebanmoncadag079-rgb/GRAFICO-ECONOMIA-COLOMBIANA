@@ -48,7 +48,7 @@ python dashboard_colombia.py
 
 El dashboard necesita `colcap_oficial.csv`, `tasas_interes_clean.csv`,
 `inflacion_clean.csv`, `pib_colombia.csv`, `estado_fuentes.csv`,
-`indices_colombia.csv` e `indices_experimentales_mensuales.csv`. Las tres
+`indices_colombia.csv` e `indices_experimentales_mensuales.csv`. Las dos
 lineas historicas bursatiles se muestran punteadas y bajo revision; no
 alimentan la linea ni la tarjeta oficial del COLCAP.
 Los CSV deben versionarse juntos para que Render arranque con datos

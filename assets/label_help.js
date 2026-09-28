@@ -1,7 +1,6 @@
 (function () {
   "use strict";
   const aliases = {
-    "ICOLCAP empalmado · legado": "ICOLCAP empalmado",
     "Índice equiponderado · legado": "Índice equiponderado",
     "7 Magníficas · legado": "7 Magníficas",
     "IPC mensual · derecha": "Inflación mensual",

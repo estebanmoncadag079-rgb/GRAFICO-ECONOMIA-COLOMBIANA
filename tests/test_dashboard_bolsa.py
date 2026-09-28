@@ -6,10 +6,15 @@ import dashboard_colombia as dashboard
 class BolsaChartTests(unittest.TestCase):
     def test_original_comparisons_remain_available(self):
         figure = dashboard.make_fig_bolsa(dashboard.df_colcap)
-        self.assertEqual(len(figure.data), 4)
+        self.assertEqual(len(figure.data), 3)
         self.assertEqual(figure.data[0].name, "COLCAP oficial")
-        self.assertIn("equiponderado", figure.data[2].name)
-        self.assertIn("7 Magníficas", figure.data[3].name)
+        self.assertIn("equiponderado", figure.data[1].name)
+        self.assertIn("7 Magníficas", figure.data[2].name)
+
+    def test_spliced_icolcap_line_was_removed(self):
+        figure = dashboard.make_fig_bolsa(dashboard.df_colcap)
+        self.assertFalse(any("ICOLCAP" in trace.name for trace in figure.data))
+        self.assertNotIn("ICOLCAP empalmado", dashboard.LABEL_HELP)
 
     def test_official_series_can_be_isolated(self):
         figure = dashboard.make_fig_bolsa(dashboard.df_colcap, layers=["oficial"])
@@ -26,7 +31,7 @@ class BolsaChartTests(unittest.TestCase):
         self.assertEqual(len(dashboard.make_fig_bolsa(
             dashboard.df_colcap, x_range=["2024-01-01", "2025-01-01"]).layout.annotations), 0)
         self.assertEqual(len(dashboard.make_fig_bolsa(
-            dashboard.df_colcap, layers=["referencia"]).layout.annotations), 0)
+            dashboard.df_colcap, layers=["equiponderado"]).layout.annotations), 0)
 
         transition_day = dashboard.df_colcap[
             dashboard.df_colcap["fecha"] == dashboard.COLCAP_MSCI_TRANSITION]
