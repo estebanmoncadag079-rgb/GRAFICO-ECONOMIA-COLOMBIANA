@@ -18,8 +18,17 @@
     arrays.set(values, decoded);
     return decoded;
   }
+  // Compara solo el día calendario ("2026-08-31"), como medianoche UTC.
+  // Plotly entrega "2026-08-31" y las series "2026-08-31T00:00:00"; sin esto,
+  // el navegador lee una en UTC y la otra en hora local (Colombia, UTC-5) y el
+  // dato del 31 de agosto quedaba "después" del cursor ubicado en esa fecha.
+  function day(value) {
+    if (typeof value === "number") return value;
+    return Date.parse(String(value).slice(0, 10) + "T00:00:00Z");
+  }
+
   function period(value, frequency) {
-    const date = new Date(value);
+    const date = new Date(day(value));
     const month = date.getUTCMonth();
     const year = date.getUTCFullYear();
     if (frequency === "quarterly") return `T${Math.floor(month / 3) + 1} ${year}`;
@@ -34,7 +43,7 @@
     let high = trace.x.length;
     while (low < high) {
       const mid = Math.floor((low + high) / 2);
-      if (Date.parse(trace.x[mid]) <= reference) low = mid + 1;
+      if (day(trace.x[mid]) <= reference) low = mid + 1;
       else high = mid;
     }
     for (let i = low - 1; i >= 0; i--) {
@@ -55,9 +64,9 @@
       const context = window.dash_clientside.callback_context;
       const reset = (context.triggered || []).some(item => item.prop_id.endsWith(".figure"));
       const point = !reset && hover && hover.points && hover.points[0];
-      let reference = point && Date.parse(point.x);
+      let reference = point && day(point.x);
       if (!Number.isFinite(reference)) {
-        reference = Math.max(...traces.map(trace => Date.parse(trace.x[trace.x.length - 1]) || 0));
+        reference = Math.max(...traces.map(trace => day(trace.x[trace.x.length - 1]) || 0));
       }
       const entries = traces.map(trace => {
         const item = observation(trace, reference);
