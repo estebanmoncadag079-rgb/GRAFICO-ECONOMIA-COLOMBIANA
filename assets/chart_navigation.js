@@ -74,6 +74,14 @@
       const pad = Math.max((high - low) * 0.06, Math.abs(high) * 0.005, 0.05);
       update["yaxis.range"] = [low - pad, high + pad];
     }
+    // Panel inferior independiente (pendiente TES): siempre con el cero visible.
+    if (gd.layout.yaxis2) {
+      const lower = [0, ...visibleValues(gd, start, end, "y2")];
+      const low = Math.min(...lower);
+      const high = Math.max(...lower);
+      const pad = Math.max((high - low) * 0.1, 0.1);
+      update["yaxis2.range"] = [low - pad, high + pad];
+    }
     if (Object.keys(update).length) Plotly.relayout(gd, update);
   }
 

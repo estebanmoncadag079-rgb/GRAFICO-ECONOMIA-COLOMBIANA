@@ -396,45 +396,76 @@ def make_fig_inflacion(dff, x_range=None, show_layers=None):
 # ══════════════════════════════════════════════════════════
 # 5E. PANEL TES PESOS
 # ══════════════════════════════════════════════════════════
-_TES_FILL = {
-    "tes_pesos_1y":  "rgba(255,166,87,0.09)",
-    "tes_pesos_5y":  "rgba(56,189,248,0.09)",
-    "tes_pesos_10y": "rgba(188,140,255,0.09)",
-}
+C_CURVA_NORMAL    = "#16a34a"   # 10A por encima de 1A
+C_CURVA_INVERTIDA = "#dc2626"   # 10A por debajo de 1A
 
 def make_fig_tes(dff, active_tenors, x_range=None):
+    """Tasas arriba como líneas limpias; abajo, la pendiente 10A − 1A."""
     fig = go.Figure()
+    clean = {}
     for key, col, color, label in [
         ("1A",  "tes_pesos_1y",  C_TES1,  "TES 1 año  (corto plazo)"),
         ("5A",  "tes_pesos_5y",  C_TES5,  "TES 5 años (medio plazo)"),
         ("10A", "tes_pesos_10y", C_TES10, "TES 10 años (largo plazo)"),
     ]:
-        vis = True if key in active_tenors else "legendonly"
-        grp = f"tes_{key}"
         values = dff[col].mask(isolated_tes_spikes(dff[col]))
-        # Área rellena (vinculada al grupo de leyenda)
+        clean[key] = values
         fig.add_trace(go.Scatter(
             x=dff["fecha"], y=values,
-            mode="lines", line=dict(color=color, width=0),
-            fill="tozeroy", fillcolor=_TES_FILL[col],
-            legendgroup=grp, showlegend=False, hoverinfo="skip",
-            visible=vis,
-        ))
-        # Línea principal
-        fig.add_trace(go.Scatter(
-            x=dff["fecha"], y=values,
-            name=label, visible=vis, mode="lines",
-            line=dict(color=color, width=2.5),
-            legendgroup=grp,
+            name=label, visible=True if key in active_tenors else "legendonly",
+            mode="lines", line=dict(color=color, width=1.6),
             meta=dict(label=f"TES {key}", unit="%", frequency="daily"),
             hovertemplate=f"<b>{label}:</b> %{{y:.2f}}%<extra></extra>",
         ))
-    fig.update_layout(
-        **BASE_LAYOUT, height=310,
-        xaxis=xaxis_base(x_range),
-        yaxis=yaxis_base("Tasa anual (%)", "%"),
-    )
-    return analysis_figure(fig, height=505)
+
+    slope = "1A" in active_tenors and "10A" in active_tenors
+    if slope:
+        spread = clean["10A"] - clean["1A"]
+        for part, color in [(spread.clip(lower=0), "rgba(22,163,74,0.30)"),
+                            (spread.clip(upper=0), "rgba(220,38,38,0.45)")]:
+            fig.add_trace(go.Scatter(
+                x=dff["fecha"], y=part.where(spread.notna()), yaxis="y2",
+                mode="lines", line=dict(width=0), fill="tozeroy",
+                fillcolor=color, hoverinfo="skip", showlegend=False,
+            ))
+        fig.add_trace(go.Scatter(
+            x=dff["fecha"], y=spread, yaxis="y2", name="Pendiente 10A − 1A",
+            mode="lines", line=dict(color="#475569", width=1),
+            meta=dict(label="Pendiente 10A − 1A", unit="pp", frequency="daily"),
+        ))
+
+    x_axis = {**xaxis_base(x_range), "anchor": "y2" if slope else "y", "title": None,
+              "showgrid": True, "gridcolor": GRID_CLR}
+    y_axis = {**yaxis_base("Tasa anual (%)", "%"), "showgrid": True, "gridcolor": GRID_CLR,
+              "domain": [0.36, 1] if slope else [0, 1]}
+    fig.update_layout(**BASE_LAYOUT, xaxis=x_axis, yaxis=y_axis)
+    if slope:
+        fig.update_layout(yaxis2={
+            **yaxis_base("10A − 1A (pp)"), "domain": [0, 0.26], "zeroline": True,
+            "zerolinecolor": "#94a3b8", "showgrid": True, "gridcolor": GRID_CLR})
+        fig.add_annotation(xref="paper", yref="paper", x=0, y=0.285, xanchor="left",
+                           yanchor="bottom", showarrow=False, align="left",
+                           text=(f"<b>Pendiente de la curva</b> · "
+                                 f"<span style='color:{C_CURVA_NORMAL}'>■ normal: 10A sobre 1A</span> · "
+                                 f"<span style='color:{C_CURVA_INVERTIDA}'>■ invertida: 10A bajo 1A</span>"),
+                           font=dict(size=11, color="#475569"))
+
+    # Último valor escrito en el margen derecho, a la altura de cada línea.
+    # (Anclado al borde del gráfico para no ampliar el eje de fechas.)
+    labels = []
+    for key, color in [("1A", C_TES1), ("5A", C_TES5), ("10A", C_TES10)]:
+        last = clean[key].dropna()
+        if key in active_tenors and not last.empty:
+            labels.append((float(last.iloc[-1]), key, color))
+    labels.sort()
+    for i, (value, key, color) in enumerate(labels):
+        fig.add_annotation(x=1, xref="paper", y=value, yref="y", xanchor="left", xshift=6,
+                           yshift=(i - (len(labels) - 1) / 2) * 13, showarrow=False,
+                           text=f"<b>{value:.2f}%</b> {key}", font=dict(size=11, color=color))
+
+    fig = analysis_figure(fig, height=505)
+    fig.update_layout(margin=dict(l=62, r=92, t=18, b=40))
+    return fig
 
 # ══════════════════════════════════════════════════════════
 # 6. CURVA TES (panel derecho)
