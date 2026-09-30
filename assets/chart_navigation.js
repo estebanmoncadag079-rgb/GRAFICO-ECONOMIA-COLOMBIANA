@@ -95,6 +95,12 @@
       const gd = document.querySelector(`#${id} .js-plotly-plot`);
       if (!gd || gd._fitYAttached || typeof gd.on !== "function") return;
       gd._fitYAttached = true;
+      // El primer clic de un doble clic fija una fecha; el doble clic debe
+      // volver a la vista inicial completa, así que también la libera.
+      gd.on("plotly_doubleclick", () => {
+        const release = document.getElementById("btn-soltar");
+        if (release) setTimeout(() => release.click(), 60);
+      });
       gd.on("plotly_relayout", event => {
         // Solo reacciona a cambios del eje de fechas; así no se llama a sí mismo.
         if (Object.keys(event || {}).some(key => key.startsWith("xaxis"))) fitY(gd);
