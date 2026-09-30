@@ -187,8 +187,10 @@ def latest_inflation_row(fecha):
 BASE_LAYOUT = dict(
     template="plotly_white",
     paper_bgcolor=BG_PANEL, plot_bgcolor=BG_PANEL,
-    hovermode="closest",
-    hoverdistance=30,
+    # Hover por fecha en cualquier punto del área: la curva TES sigue al cursor.
+    hovermode="x",
+    hoverdistance=-1,
+    spikedistance=-1,
     dragmode="zoom",
     font=dict(family="Arial, sans-serif", size=12, color="#25343b"),
     showlegend=False,
