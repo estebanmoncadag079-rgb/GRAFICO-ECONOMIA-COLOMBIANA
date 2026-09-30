@@ -43,3 +43,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Ayuda de navegación sobre cada gráfico */
+.chart-hint {
+  margin: 6px 2px 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}

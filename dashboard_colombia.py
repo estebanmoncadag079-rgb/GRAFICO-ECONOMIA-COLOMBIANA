@@ -191,7 +191,7 @@ BASE_LAYOUT = dict(
     hovermode="x",
     hoverdistance=-1,
     spikedistance=-1,
-    dragmode="zoom",
+    dragmode="pan",
     font=dict(family="Arial, sans-serif", size=12, color="#25343b"),
     showlegend=False,
     hoverlabel=dict(bgcolor="#ffffff", font_size=12, namelength=-1, bordercolor=BORDER),
@@ -225,9 +225,10 @@ def yaxis_base(title, suffix=""):
 
 
 CHART_CONFIG = {
-    "displaylogo": False, "scrollZoom": False, "responsive": True,
+    # Navegación tipo plataforma de trading: rueda = zoom, arrastre = desplazamiento.
+    "displaylogo": False, "scrollZoom": True, "responsive": True,
     "displayModeBar": "hover", "doubleClick": "reset",
-    "modeBarButtons": [["zoom2d", "pan2d", "zoomIn2d", "zoomOut2d", "resetScale2d", "toImage"]],
+    "modeBarButtons": [["pan2d", "zoom2d", "zoomIn2d", "zoomOut2d", "resetScale2d", "toImage"]],
 }
 
 
@@ -241,7 +242,7 @@ def analysis_figure(fig, height=420, period_axis=False):
         if trace.x is not None:
             trace.x = [pd.Timestamp(x).isoformat() for x in trace.x]
     fig.update_layout(height=height, margin=dict(l=62, r=64, t=18, b=66),
-                      showlegend=False)
+                      showlegend=False, uirevision="vista")
     if period_axis:
         fig.update_xaxes(title_text="Período de referencia")
     return fig
@@ -513,6 +514,14 @@ def chart_description(title, text):
 def chart_readout(chart_id):
     return html.Div(id=f"{chart_id}-readout", className="chart-readout",
                     role="group", **{"aria-label": "Valores por serie y período"})
+
+
+NAV_HINT = ("Arrastra para moverte en el tiempo · Rueda del mouse para acercar o alejar · "
+            "Doble clic para ver todo el período · Clic para fijar una fecha")
+
+
+def chart_hint():
+    return html.Div(NAV_HINT, className="chart-hint")
 
 
 def help_label(label):
@@ -841,6 +850,7 @@ app.layout = html.Div([
                        "borderRadius":"8px","marginBottom":"4px"},
                 inputStyle={"marginRight":"4px","marginLeft":"12px"}),
             chart_readout("chart-bolsa"),
+            chart_hint(),
             dcc.Graph(id="chart-bolsa", clear_on_unhover=False, config=CHART_CONFIG,
                 style={"height":"420px"}),
         ], className="dash-card dash-card--wide"),
@@ -880,6 +890,7 @@ app.layout = html.Div([
                 "borderRadius":"8px","padding":"8px 10px","marginBottom":"4px",
             }),
             chart_readout("chart-inflacion"),
+            chart_hint(),
             dcc.Graph(id="chart-inflacion", clear_on_unhover=False, config=CHART_CONFIG,
                 style={"marginBottom":"4px","height":"450px"}),
             ], className="dash-card"),
@@ -891,11 +902,13 @@ app.layout = html.Div([
                 "border":f"1px solid {BORDER}","borderRadius":"8px",
                 "marginBottom":"8px",
             }),
-            html.Button("×", id="btn-soltar", n_clicks=0,
-                        title="Liberar fecha fijada", **{"aria-label": "Liberar fecha fijada"},
-                        style={"alignSelf":"flex-end","width":"32px","height":"32px",
-                               "border":f"1px solid {BORDER}","background":"#fff",
-                               "borderRadius":"4px","cursor":"pointer","fontSize":"22px"}),
+            html.Button("↺ Liberar fecha fijada y volver a seguir el cursor", id="btn-soltar", n_clicks=0,
+                        title="Al hacer clic en un gráfico la fecha queda fija. Este botón la libera: "
+                              "la curva vuelve a mostrar la fecha por donde pasa el cursor.",
+                        style={"alignSelf":"stretch","minHeight":"34px","padding":"6px 12px",
+                               "border":f"1px solid {BORDER}","background":"#fff","color":TEXT,
+                               "borderRadius":"8px","cursor":"pointer","fontSize":"12px",
+                               "fontWeight":"700","marginBottom":"8px"}),
 
             html.Div(id="fecha-activa", style={
                 "fontSize":"12px","fontWeight":"800","color":TEXT,
@@ -963,6 +976,7 @@ app.layout = html.Div([
                 "borderRadius":"8px","padding":"8px 10px","marginBottom":"4px",
             }),
             chart_readout("chart-tes"),
+            chart_hint(),
             dcc.Graph(id="chart-tes", clear_on_unhover=False, config=CHART_CONFIG,
                 style={"marginBottom":"4px","height":"505px"}),
             ], className="dash-card"),
@@ -1095,7 +1109,9 @@ def sync_zoom(*args):
 
     panel_val = PANEL_IDS.get(trigger)
     if not panel_val or panel_val not in (synced or []):
-        return current or {}
+        # Sin sincronía, el zoom de un gráfico no debe redibujar los demás
+        # (redibujar devolvía la vista inicial a los pocos segundos).
+        return no_update
 
     idx   = ALL_CHARTS.index(trigger)
     relay = relay_list[idx]
@@ -1135,7 +1151,7 @@ def upd_bolsa(window, xrd, synced, layers):
         return no_update
     dff = filter_window(df_colcap, window)
     xr  = (xrd or {}).get("range") if "bolsa" in (synced or []) else None
-    return make_fig_bolsa(dff, xr, layers)
+    return make_fig_bolsa(dff, xr, layers).update_layout(uirevision=window)
 
 @app.callback(
     Output("chart-inflacion","figure"),
@@ -1149,7 +1165,7 @@ def upd_inflacion(window, xrd, synced, layers):
         return no_update
     dff = filter_window(df_daily, window)
     xr  = (xrd or {}).get("range") if "inflacion" in (synced or []) else None
-    return make_fig_inflacion(dff, xr, layers)
+    return make_fig_inflacion(dff, xr, layers).update_layout(uirevision=window)
 
 @app.callback(
     Output("chart-tes","figure"),
@@ -1163,7 +1179,7 @@ def upd_tes(window, xrd, synced, active_tenors):
         return no_update
     dff = filter_window(df_tes, window)
     xr  = (xrd or {}).get("range") if "tes" in (synced or []) else None
-    return make_fig_tes(dff, active_tenors, xr)
+    return make_fig_tes(dff, active_tenors, xr).update_layout(uirevision=window)
 
 
 # ── Curva TES + métricas (hover/click) ───────────────────
