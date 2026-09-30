@@ -431,7 +431,7 @@ def make_fig_tes(dff, active_tenors, x_range=None):
         xaxis=xaxis_base(x_range),
         yaxis=yaxis_base("Tasa anual (%)", "%"),
     )
-    return analysis_figure(fig, height=350)
+    return analysis_figure(fig, height=505)
 
 # ══════════════════════════════════════════════════════════
 # 6. CURVA TES (panel derecho)
@@ -462,7 +462,7 @@ def make_curve_fig(row, active_tenors):
     ))
     fig.update_layout(
         template="plotly_white", paper_bgcolor=BG_PANEL, plot_bgcolor=BG_PANEL,
-        height=260, margin=dict(l=50, r=15, t=15, b=45),
+        height=395, margin=dict(l=50, r=15, t=15, b=45),
         hoverlabel=dict(bgcolor="#ffffff", font_size=12),
         xaxis=dict(title="Plazo del bono", showgrid=False, color=TEXT, tickfont=dict(size=11)),
         yaxis=dict(title="Tasa (%)", range=[min(y_vals)-pad, max(y_vals)+pad],
@@ -808,14 +808,13 @@ app.layout = html.Div([
 
     # CUERPO
     html.Div([
-
-        # ── PANEL IZQUIERDO ──────────────────────────────
-        html.Div([
             # sync-panels oculto (necesario para callbacks)
             html.Div(dcc.Checklist(id="sync-panels",
                 options=[{"label":"","value":v} for v in ["inflacion","tes","bolsa"]],
                 value=[]), style={"display":"none"}),
 
+        # Fila 1 · bolsa a todo lo ancho
+        html.Div([
             # Los 3 gráficos — orden: ① COLCAP/mercado · ② Inflación/PIB · ③ TES
             html.Div([
                 html.Div("COLCAP Y CANASTAS COLOMBIANAS",
@@ -840,7 +839,13 @@ app.layout = html.Div([
                        "borderRadius":"8px","marginBottom":"4px"},
                 inputStyle={"marginRight":"4px","marginLeft":"12px"}),
             chart_readout("chart-bolsa"),
-            dcc.Graph(id="chart-bolsa", clear_on_unhover=False, config=CHART_CONFIG),
+            dcc.Graph(id="chart-bolsa", clear_on_unhover=False, config=CHART_CONFIG,
+                style={"height":"420px"}),
+        ], className="dash-card dash-card--wide"),
+
+        # Fila 2 · inflación y PIB junto a la curva de tasas TES
+        html.Div([
+            html.Div([
             html.Div([
                 html.Div("INFLACIÓN Y PIB",
                          style={"fontSize":"19px","fontWeight":"900","color":TEXT,
@@ -874,42 +879,9 @@ app.layout = html.Div([
             }),
             chart_readout("chart-inflacion"),
             dcc.Graph(id="chart-inflacion", clear_on_unhover=False, config=CHART_CONFIG,
-                style={"marginBottom":"4px"}),
+                style={"marginBottom":"4px","height":"450px"}),
+            ], className="dash-card"),
             html.Div([
-                html.Div("SEÑALES DE MERCADO COLOMBIANO",
-                         style={"fontSize":"19px","fontWeight":"900","color":TEXT,
-                                "textAlign":"center","letterSpacing":"1.5px"}),
-                html.Div("Curva cero cupón TES pesos · observaciones diarias",
-                         style={"fontSize":"13px","color":MUTED,"textAlign":"center","marginTop":"3px"}),
-            ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
-                      "borderRadius":"8px","marginBottom":"3px"}),
-            chart_description("TES: tasas de la deuda pública",
-                "Tasas anuales de la curva cero cupón de TES en pesos, publicadas por el Banco de la República "
-                "para plazos de 1, 5 y 10 años. La serie reúne observaciones de días de mercado sobre la deuda "
-                "del Gobierno colombiano. La diferencia entre las tasas de 10 y 1 año, expresada en puntos "
-                "porcentuales, resume la pendiente entre los plazos largo y corto."),
-            html.Div([
-                html.Div("Plazos visibles",
-                         style={"fontSize":"11px","fontWeight":"800","color":MUTED,"marginRight":"6px"}),
-                dcc.Checklist(id="curve-toggle",
-                    options=[{"label":help_label(v),"value":v} for v in ["1A","5A","10A"]],
-                    value=["1A","5A","10A"], inline=True,
-                    inputStyle={"marginRight":"5px","marginLeft":"10px"},
-                    labelStyle={"fontSize":"12px","color":TEXT,"whiteSpace":"nowrap"}),
-            ], className="chart-local-controls", style={
-                "display":"flex","alignItems":"center","gap":"4px","flexWrap":"wrap",
-                "background":BG_PANEL,"border":f"1px solid {BORDER}",
-                "borderRadius":"8px","padding":"8px 10px","marginBottom":"4px",
-            }),
-            chart_readout("chart-tes"),
-            dcc.Graph(id="chart-tes", clear_on_unhover=False, config=CHART_CONFIG,
-                style={"marginBottom":"4px"}),
-
-        ], className="dashboard-main", style={"width":"64%","background":BG_PANEL,
-                  "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"10px"}),
-
-        # ── PANEL DERECHO ────────────────────────────────
-        html.Div([
             html.Div("CURVA DE RENDIMIENTOS TES", style={
                 "fontSize":"19px","fontWeight":"900","color":TEXT,
                 "textAlign":"center","letterSpacing":"1.5px",
@@ -949,16 +921,50 @@ app.layout = html.Div([
                     "displayModeBar": "hover",
                     "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
                 },
-                style={"height":"260px"}),
+                style={"height":"395px"}),
 
             html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
             html.Div("Últimas observaciones por frecuencia",
                      style={"fontSize":"10px","color":MUTED,"marginBottom":"6px"}),
             html.Div(id="curve-metrics",
                      style={"display":"flex","gap":"5px","flexWrap":"wrap"}),
+            ], className="dash-card dash-card--side"),
+        ], className="dash-row"),
 
-            html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
-
+        # Fila 3 · TES junto al ciclo económico
+        html.Div([
+            html.Div([
+            html.Div([
+                html.Div("SEÑALES DE MERCADO COLOMBIANO",
+                         style={"fontSize":"19px","fontWeight":"900","color":TEXT,
+                                "textAlign":"center","letterSpacing":"1.5px"}),
+                html.Div("Curva cero cupón TES pesos · observaciones diarias",
+                         style={"fontSize":"13px","color":MUTED,"textAlign":"center","marginTop":"3px"}),
+            ], style={"padding":"8px 14px","background":BG_CARD,"border":f"1px solid {BORDER}",
+                      "borderRadius":"8px","marginBottom":"3px"}),
+            chart_description("TES: tasas de la deuda pública",
+                "Tasas anuales de la curva cero cupón de TES en pesos, publicadas por el Banco de la República "
+                "para plazos de 1, 5 y 10 años. La serie reúne observaciones de días de mercado sobre la deuda "
+                "del Gobierno colombiano. La diferencia entre las tasas de 10 y 1 año, expresada en puntos "
+                "porcentuales, resume la pendiente entre los plazos largo y corto."),
+            html.Div([
+                html.Div("Plazos visibles",
+                         style={"fontSize":"11px","fontWeight":"800","color":MUTED,"marginRight":"6px"}),
+                dcc.Checklist(id="curve-toggle",
+                    options=[{"label":help_label(v),"value":v} for v in ["1A","5A","10A"]],
+                    value=["1A","5A","10A"], inline=True,
+                    inputStyle={"marginRight":"5px","marginLeft":"10px"},
+                    labelStyle={"fontSize":"12px","color":TEXT,"whiteSpace":"nowrap"}),
+            ], className="chart-local-controls", style={
+                "display":"flex","alignItems":"center","gap":"4px","flexWrap":"wrap",
+                "background":BG_PANEL,"border":f"1px solid {BORDER}",
+                "borderRadius":"8px","padding":"8px 10px","marginBottom":"4px",
+            }),
+            chart_readout("chart-tes"),
+            dcc.Graph(id="chart-tes", clear_on_unhover=False, config=CHART_CONFIG,
+                style={"marginBottom":"4px","height":"505px"}),
+            ], className="dash-card"),
+            html.Div([
             html.Section([
                 html.H2("CICLO ECONÓMICO", className="cycle-title"),
                 html.P("Estimación con PIB real e inflación anual al cierre de cada trimestre.",
@@ -1024,9 +1030,12 @@ app.layout = html.Div([
                     ]),
                 ], className="cycle-method"),
             ], className="cycle-section"),
+            ], className="dash-card dash-card--side"),
+        ], className="dash-row"),
 
-            html.Hr(style={"borderColor":BORDER,"margin":"8px 0"}),
-
+        # Fila 4 · guion y clases de activos
+        html.Div([
+            html.Div([
             html.Div("Guion rapido para explicarlo",
                      style={"fontSize":"12px","fontWeight":"900","color":TEXT,
                             "marginBottom":"8px"}),
@@ -1036,8 +1045,8 @@ app.layout = html.Div([
                 html.Li("Luego mira TES: compara las tasas de 1, 5 y 10 años y la pendiente de la curva.", style={"marginBottom":"6px"}),
                 html.Li("Cierra con el ciclo: la fase estimada usa PIB real e inflación, no el COLCAP ni los TES.", style={"marginBottom":"0"}),
             ], style={"fontSize":"12px","color":MUTED,"lineHeight":"1.45","paddingLeft":"18px","margin":"0"}),
-
-            html.Hr(style={"borderColor":BORDER,"margin":"10px 0"}),
+            ], className="dash-card dash-card--note"),
+            html.Div([
             html.Div("Clases de activos en la historia",
                      style={"fontSize":"12px","fontWeight":"900","color":TEXT,
                             "marginBottom":"8px"}),
@@ -1047,12 +1056,10 @@ app.layout = html.Div([
                 html.Span("Materias primas", className="asset-pill"),
                 html.Span("Divisas", className="asset-pill"),
             ], style={"display":"flex","gap":"6px","flexWrap":"wrap"}),
+            ], className="dash-card dash-card--note"),
+        ], className="dash-row dash-row--notes"),
 
-        ], className="dashboard-side", style={"width":"36%","background":BG_PANEL,
-                  "border":f"1px solid {BORDER}","borderRadius":"12px","padding":"14px",
-                  "display":"flex","flexDirection":"column"}),
-
-    ], className="dashboard-body", style={"display":"flex","gap":"12px","alignItems":"flex-start"}),
+    ], className="dashboard-body"),
 
     # Stores
     dcc.Store(id="detail-window",  data="1A"),

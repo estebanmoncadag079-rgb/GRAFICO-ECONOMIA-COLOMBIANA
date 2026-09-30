@@ -1,0 +1,45 @@
+/* Distribución del cuerpo en filas. Se carga después de responsive.css y
+   conserva el aspecto de los paneles originales (fondo, borde y radio). */
+.dashboard-body {
+  display: grid !important;
+  gap: 12px;
+}
+
+.dash-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.dash-row--notes {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.dash-card {
+  min-width: 0;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.dash-card--side {
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+}
+
+.dash-card--note {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 14px;
+}
+
+@media (max-width: 1080px) {
+  .dash-row,
+  .dash-row--notes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
