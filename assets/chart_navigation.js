@@ -4,7 +4,12 @@
   // tramo visible, como en una plataforma de trading. Los valores no cambian;
   // solo el rango que se dibuja.
   const CHARTS = ["chart-bolsa", "chart-inflacion", "chart-tes", "detail-chart"];
-  const time = value => Date.parse(String(value).replace(" ", "T"));
+  // Todas las fechas en hora local; "2026-08-31" (sin hora) se leería en UTC
+  // y desplazaría el tramo visible cinco horas en Colombia.
+  const time = value => {
+    const text = String(value).replace(" ", "T");
+    return Date.parse(text.length === 10 ? `${text}T00:00:00` : text);
+  };
 
   function visibleValues(gd, start, end, axis) {
     const values = [];
