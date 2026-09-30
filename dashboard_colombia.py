@@ -228,7 +228,7 @@ CHART_CONFIG = {
     # Navegación tipo plataforma de trading: rueda = zoom, arrastre = desplazamiento.
     "displaylogo": False, "scrollZoom": True, "responsive": True,
     "displayModeBar": "hover", "doubleClick": "reset",
-    "modeBarButtons": [["pan2d", "zoom2d", "zoomIn2d", "zoomOut2d", "resetScale2d", "toImage"]],
+    "modeBarButtons": [["resetScale2d", "toImage"]],  # volver a todo · descargar imagen
 }
 
 
@@ -786,27 +786,9 @@ app.layout = html.Div([
         "gap":"10px","marginBottom":"12px",
     }),
 
-    # Controles principales
+    # Estado de las fuentes y acceso a la vista de detalle
     html.Div([
-        html.Div("Período", style={"fontSize":"11px","fontWeight":"700","color":MUTED,"marginBottom":"4px"}),
-        dcc.Dropdown(id="time-window",
-            options=[{"label":l,"value":v} for l,v in [
-                ("3 meses","3M"),("6 meses","6M"),("1 año","1A"),
-                ("3 años","3A"),("5 años","5A"),("Todo","ALL")]],
-            value="ALL", clearable=False, style={"minWidth":"160px"}),
-        html.Button("Ver detalle", id="open-modal", n_clicks=0, style={
-            "background":TEXT,"color":"#ffffff","border":"0","borderRadius":"8px",
-            "padding":"8px 14px","fontSize":"12px","fontWeight":"700",
-            "cursor":"pointer","marginLeft":"auto",
-        }),
-    ], style={
-        "display":"flex","alignItems":"center","gap":"6px","flexWrap":"wrap",
-        "background":BG_PANEL,"border":f"1px solid {BORDER}",
-        "borderRadius":"12px","padding":"10px 12px","marginBottom":"12px",
-    }),
-
-    html.Div([
-        html.Div([
+        *[html.Div([
             html.Span(str(item["fuente"]), style={"fontWeight":"700","color":TEXT}),
             html.Span(periodo_fuente(item),
                       style={"color":MUTED,"marginLeft":"7px"}),
@@ -814,8 +796,14 @@ app.layout = html.Div([
                       style={"color":"#16a34a" if item["estado"] == "vigente" else "#d97706",
                              "marginLeft":"7px"}),
         ], style={"whiteSpace":"nowrap","fontSize":"11px"})
-        for _, item in df_estado[df_estado["fuente"] != "Canastas experimentales"].iterrows()
-    ], style={"display":"flex","gap":"18px","flexWrap":"wrap","padding":"0 4px 10px"}),
+        for _, item in df_estado[df_estado["fuente"] != "Canastas experimentales"].iterrows()],
+        html.Button("Ver detalle", id="open-modal", n_clicks=0, style={
+            "background":TEXT,"color":"#ffffff","border":"0","borderRadius":"8px",
+            "padding":"8px 14px","fontSize":"12px","fontWeight":"700",
+            "cursor":"pointer","marginLeft":"auto",
+        }),
+    ], style={"display":"flex","gap":"18px","flexWrap":"wrap","alignItems":"center",
+              "padding":"0 4px 12px"}),
 
     # CUERPO
     html.Div([
@@ -934,7 +922,7 @@ app.layout = html.Div([
                     "displaylogo": False,
                     "responsive": True,
                     "displayModeBar": "hover",
-                    "modeBarButtons": [["toImage", "zoomIn2d", "resetScale2d"]],
+                    "modeBarButtons": [["toImage"]],
                 },
                 style={"height":"395px"}),
 
@@ -1141,45 +1129,39 @@ def upd_cycle(window):
 
 @app.callback(
     Output("chart-bolsa","figure"),
-    Input("time-window","value"),
     Input("xrange-store","data"),
     Input("sync-panels","value"),
     Input("bolsa-layers","value"),
 )
-def upd_bolsa(window, xrd, synced, layers):
+def upd_bolsa(xrd, synced, layers):
     if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "bolsa" not in (synced or []):
         return no_update
-    dff = filter_window(df_colcap, window)
     xr  = (xrd or {}).get("range") if "bolsa" in (synced or []) else None
-    return make_fig_bolsa(dff, xr, layers).update_layout(uirevision=window)
+    return make_fig_bolsa(df_colcap, xr, layers)
 
 @app.callback(
     Output("chart-inflacion","figure"),
-    Input("time-window","value"),
     Input("xrange-store","data"),
     Input("sync-panels","value"),
     Input("inf-layers","value"),
 )
-def upd_inflacion(window, xrd, synced, layers):
+def upd_inflacion(xrd, synced, layers):
     if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "inflacion" not in (synced or []):
         return no_update
-    dff = filter_window(df_daily, window)
     xr  = (xrd or {}).get("range") if "inflacion" in (synced or []) else None
-    return make_fig_inflacion(dff, xr, layers).update_layout(uirevision=window)
+    return make_fig_inflacion(df_daily, xr, layers)
 
 @app.callback(
     Output("chart-tes","figure"),
-    Input("time-window","value"),
     Input("xrange-store","data"),
     Input("sync-panels","value"),
     Input("curve-toggle","value"),
 )
-def upd_tes(window, xrd, synced, active_tenors):
+def upd_tes(xrd, synced, active_tenors):
     if ctx.triggered_id == "xrange-store" and (xrd or {}).get("range") and "tes" not in (synced or []):
         return no_update
-    dff = filter_window(df_tes, window)
     xr  = (xrd or {}).get("range") if "tes" in (synced or []) else None
-    return make_fig_tes(dff, active_tenors, xr).update_layout(uirevision=window)
+    return make_fig_tes(df_tes, active_tenors, xr)
 
 
 # ── Curva TES + métricas (hover/click) ───────────────────
@@ -1190,7 +1172,6 @@ def upd_tes(window, xrd, synced, active_tenors):
     Output("fecha-fijada",  "data"),
     [Input(cid, "clickData") for cid in ALL_CHARTS],
     [Input(cid, "hoverData") for cid in ALL_CHARTS],
-    Input("time-window",  "value"),
     Input("curve-toggle", "value"),
     Input("btn-soltar", "n_clicks"),
     State("fecha-fijada", "data"),
@@ -1199,16 +1180,16 @@ def update_curve(*args):
     n = len(ALL_CHARTS)
     click_list = args[:n]
     hover_list = args[n:2*n]
-    window, active_tenors, fecha_fijada = args[2*n], args[2*n+1], args[2*n+3]
+    active_tenors, fecha_fijada = args[2*n], args[2*n+2]
 
-    dff     = filter_window(df_daily, window)
+    dff     = df_daily
     trigger = ctx.triggered_id
 
     click_map = {cid: click_list[i] for i, cid in enumerate(ALL_CHARTS)}
     hover_map = {cid: hover_list[i]  for i, cid in enumerate(ALL_CHARTS)}
 
     triggered_property = ctx.triggered[0]["prop_id"] if ctx.triggered else ""
-    if trigger == "btn-soltar" or trigger == "time-window":
+    if trigger == "btn-soltar":
         row = dff.iloc[-1]
         nueva_fecha = None
     elif triggered_property.endswith(".clickData") and click_map.get(trigger):

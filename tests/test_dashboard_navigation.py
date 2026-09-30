@@ -36,6 +36,15 @@ class NavigationTests(unittest.TestCase):
             with self.subTest(name):
                 self.assertTrue(figure.layout.uirevision)
 
+    def test_redundant_period_selector_was_removed(self):
+        # Zoom y arrastre reemplazan el selector de período del encabezado.
+        self.assertIsNone(find_component(dashboard.app.layout, "time-window"))
+        self.assertIsNotNone(find_component(dashboard.app.layout, "open-modal"))
+
+    def test_toolbar_keeps_only_reset_and_download(self):
+        # Arrastre, rueda y doble clic ya cubren mover y acercar.
+        self.assertEqual(dashboard.CHART_CONFIG["modeBarButtons"], [["resetScale2d", "toImage"]])
+
     def test_release_button_explains_its_action(self):
         button = find_component(dashboard.app.layout, "btn-soltar")
         self.assertIn("Liberar fecha", str(button.children))
