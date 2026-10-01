@@ -467,7 +467,7 @@ def make_fig_tes(dff, active_tenors, x_range=None):
                            yshift=(i - (len(labels) - 1) / 2) * 13, showarrow=False,
                            text=f"<b>{value:.2f}%</b> {key}", font=dict(size=11, color=color))
 
-    fig = analysis_figure(fig, height=505)
+    fig = analysis_figure(fig, height=580)
     fig.update_layout(margin=dict(l=62, r=92, t=18, b=40))
     return fig
 
@@ -634,6 +634,32 @@ def latest_story_values():
 CYCLE = quarterly_cycle(df_pib, df_inf)
 CURRENT_CYCLE = CYCLE.iloc[-1]
 STORY = latest_story_values()
+
+
+# Lectura sencilla de cada cuadrante: señales, nombre y qué significa.
+CYCLE_CELL_TEXT = {
+    "freno_precios": ("PIB ▼ · Inflación ▲",
+                      "La economía se enfría, pero los precios suben más rápido."),
+    "impulso_precios": ("PIB ▲ · Inflación ▲",
+                        "La economía acelera y los precios también suben más rápido."),
+    "freno_desinflacion": ("PIB ▼ · Inflación ▼",
+                           "La economía se enfría y los precios se moderan."),
+    "impulso_desinflacion": ("PIB ▲ · Inflación ▼",
+                             "La economía acelera mientras los precios se moderan."),
+}
+
+
+def cycle_cell(code):
+    signals, meaning = CYCLE_CELL_TEXT[code]
+    current = CURRENT_CYCLE["regime"] == code
+    period = f"T{CURRENT_CYCLE['quarter'].quarter} {CURRENT_CYCLE['quarter'].year}"
+    return html.Div([
+        html.Span(signals, className="cycle-cell__signals"),
+        html.Strong(REGIMES[code][0]),
+        html.Span(meaning, className="cycle-cell__text"),
+        html.Span(f"● Estamos aquí · {period}" if current else "", className="cycle-cell__badge"),
+    ], className="cycle-cell" + (" cycle-cell--current" if current else ""),
+       style={"--cycle-color": REGIMES[code][1]})
 
 
 def make_cycle_fig(window="6A"):
@@ -1001,7 +1027,7 @@ app.layout = html.Div([
             chart_readout("chart-tes"),
             chart_hint(),
             dcc.Graph(id="chart-tes", clear_on_unhover=False, config=CHART_CONFIG,
-                style={"marginBottom":"4px","height":"505px"}),
+                style={"marginBottom":"4px","height":"580px"}),
             ], className="dash-card"),
             html.Div([
             html.Section([
@@ -1025,24 +1051,16 @@ app.layout = html.Div([
                         html.Small(f"Cambio {CURRENT_CYCLE['inflation_change_pp']:+.2f} pp"),
                     ]),
                 ], className="cycle-evidence"),
+                html.P("Columnas: hacia dónde va el PIB. Filas: hacia dónde va la inflación. "
+                       "Ambas frente al trimestre anterior.", className="cycle-grid-guide"),
                 html.Div([
                     html.Div("", className="cycle-grid-corner"),
-                    html.Div("PIB pierde impulso", className="cycle-axis-label"),
-                    html.Div("PIB gana impulso", className="cycle-axis-label"),
-                    html.Div("IPC acelera", className="cycle-axis-label cycle-row-label"),
-                    *[html.Div([
-                        html.Strong(REGIMES[code][0]),
-                        html.Span("Actual" if CURRENT_CYCLE["regime"] == code else ""),
-                    ], className="cycle-cell" + (" cycle-cell--current" if CURRENT_CYCLE["regime"] == code else ""),
-                        style={"--cycle-color": REGIMES[code][1]})
-                      for code in ("freno_precios", "impulso_precios")],
-                    html.Div("IPC cede", className="cycle-axis-label cycle-row-label"),
-                    *[html.Div([
-                        html.Strong(REGIMES[code][0]),
-                        html.Span("Actual" if CURRENT_CYCLE["regime"] == code else ""),
-                    ], className="cycle-cell" + (" cycle-cell--current" if CURRENT_CYCLE["regime"] == code else ""),
-                        style={"--cycle-color": REGIMES[code][1]})
-                      for code in ("freno_desinflacion", "impulso_desinflacion")],
+                    html.Div("PIB ▼ se frena", className="cycle-axis-label"),
+                    html.Div("PIB ▲ acelera", className="cycle-axis-label"),
+                    html.Div("Inflación ▲ sube", className="cycle-axis-label cycle-row-label"),
+                    *[cycle_cell(code) for code in ("freno_precios", "impulso_precios")],
+                    html.Div("Inflación ▼ baja", className="cycle-axis-label cycle-row-label"),
+                    *[cycle_cell(code) for code in ("freno_desinflacion", "impulso_desinflacion")],
                 ], className="cycle-grid"),
                 html.Div([
                     html.H3("Trayectoria del PIB y cambios de régimen", className="cycle-chart-title"),
