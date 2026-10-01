@@ -24,15 +24,23 @@
     return values;
   }
 
+  // Límites del arrastre con margen: si el tope cae justo en el primer o el
+  // último dato, la barra de ese mes queda cortada a la mitad y las líneas
+  // terminan pegadas al borde.
   function dataBounds(gd) {
     let low = Infinity;
     let high = -Infinity;
+    let step = 0;
     (gd._fullData || []).forEach(trace => {
-      if (trace.visible !== true || !trace.x || !trace.x.length) return;
+      const n = trace.x ? trace.x.length : 0;
+      if (trace.visible !== true || !n) return;
       low = Math.min(low, time(trace.x[0]));
-      high = Math.max(high, time(trace.x[trace.x.length - 1]));
+      high = Math.max(high, time(trace.x[n - 1]));
+      if (n > 1) step = Math.max(step, time(trace.x[n - 1]) - time(trace.x[n - 2]));
     });
-    return Number.isFinite(low) ? [low, high] : null;
+    if (!Number.isFinite(low)) return null;
+    const pad = Math.max(step * 0.6, (high - low) * 0.01);
+    return [low - pad, high + pad];
   }
 
   // Fecha local en el formato de Plotly (mismo reloj que time()).
