@@ -467,7 +467,7 @@ def make_fig_tes(dff, active_tenors, x_range=None):
                            yshift=(i - (len(labels) - 1) / 2) * 13, showarrow=False,
                            text=f"<b>{value:.2f}%</b> {key}", font=dict(size=11, color=color))
 
-    fig = analysis_figure(fig, height=580)
+    fig = analysis_figure(fig, height=635)
     fig.update_layout(margin=dict(l=62, r=92, t=18, b=40))
     return fig
 
@@ -535,13 +535,15 @@ def chart_description(title, text):
         "Bolsa colombiana: mercado y canastas": "market",
         "Inflación y PIB: precios y actividad": "macro",
         "TES: tasas de la deuda pública": "rates",
+        "Ciclo económico: fases y activos": "curve",
     }[title]
     return html.Details([
         html.Summary([
             html.Span("Descripción del gráfico"),
             html.Span(className="panel-explainer__chevron", **{"aria-hidden": "true"}),
         ]),
-        html.Div(html.P(text), className="panel-explainer__content"),
+        html.Div(html.P(text) if isinstance(text, str) else text,
+                 className="panel-explainer__content"),
     ], open=False, className=f"panel-explainer panel-explainer--{tone}",
        **{"aria-label": title})
 
@@ -660,6 +662,60 @@ def cycle_cell(code):
         html.Span(f"● Estamos aquí · {period}" if current else "", className="cycle-cell__badge"),
     ], className="cycle-cell" + (" cycle-cell--current" if current else ""),
        style={"--cycle-color": REGIMES[code][1]})
+
+
+# Qué suele pasar con cada clase de activo en cada fase, en palabras sencillas.
+# Orden del recorrido típico del ciclo; cada fase se asocia a su cuadrante.
+CYCLE_ASSETS = [
+    ("impulso_desinflacion", "Recuperación", [
+        ("Acciones", "Las empresas esperan ganar más y la gente se anima a invertir."),
+        ("Bonos y TES", "Si la inflación y las tasas bajan, los bonos pueden subir de precio."),
+        ("Dólar y peso", "Depende de cómo se comparen nuestras tasas con las de otros países y de la confianza en Colombia."),
+        ("Petróleo y materias primas", "La demanda puede empezar a recuperarse."),
+    ]),
+    ("impulso_precios", "Expansión", [
+        ("Acciones", "Las ganancias pueden crecer; suelen destacar los negocios que dependen de que la economía vaya bien, como bancos, construcción y comercio."),
+        ("Bonos y TES", "Si las tasas suben, los bonos de largo plazo pueden perder valor."),
+        ("Dólar y peso", "Más crecimiento y tasas más altas pueden darle fuerza al peso."),
+        ("Petróleo y materias primas", "Más actividad económica ayuda a sostener la demanda."),
+    ]),
+    ("freno_precios", "Auge / desaceleración", [
+        ("Acciones", "Los costos altos y las tasas altas presionan las ganancias de las empresas."),
+        ("Bonos y TES", "Si la inflación no baja, las tasas pueden seguir altas."),
+        ("Dólar y peso", "El peso se vuelve más sensible a las decisiones del Banco de la República y a la desconfianza."),
+        ("Petróleo y materias primas", "Algunas pueden seguir caras por escasez o por la misma inflación."),
+    ]),
+    ("freno_desinflacion", "Recesión / contracción", [
+        ("Acciones", "Las ganancias y el optimismo suelen debilitarse."),
+        ("Bonos y TES", "Si las tasas bajan, los bonos más seguros pueden beneficiarse."),
+        ("Dólar y peso", "La gente busca monedas seguras, como el dólar, y el peso puede debilitarse."),
+        ("Petróleo y materias primas", "Con menos actividad suele caer la demanda."),
+    ]),
+]
+
+
+def cycle_asset_guide():
+    phases = []
+    for code, phase, assets in CYCLE_ASSETS:
+        current = CURRENT_CYCLE["regime"] == code
+        phases.append(html.Div([
+            html.Div([
+                html.Span(CYCLE_CELL_TEXT[code][0], className="cycle-asset-phase__signals"),
+                html.Strong(f"{phase} · {REGIMES[code][0]}"),
+                html.Span("● Estamos aquí" if current else "", className="cycle-asset-phase__badge"),
+            ], className="cycle-asset-phase__head"),
+            html.Ul([html.Li([html.B(f"{asset}: "), meaning]) for asset, meaning in assets]),
+        ], className="cycle-asset-phase" + (" cycle-asset-phase--current" if current else ""),
+           style={"--cycle-color": REGIMES[code][1]}))
+    return html.Div([
+        html.P("El ciclo económico tiene etapas: la economía se recupera, crece con fuerza, "
+               "se recalienta y luego se enfría. En cada etapa, las inversiones suelen "
+               "comportarse distinto. Esta guía resume lo que ha pasado normalmente en cada una."),
+        *phases,
+        html.P("Ojo: son tendencias que se han visto en el pasado, no predicciones y no son "
+               "recomendaciones de inversión. La fase del tablero es una clasificación "
+               "sencilla y conviene confirmarla con otros datos.", className="cycle-asset-note"),
+    ], className="cycle-asset-guide")
 
 
 def make_cycle_fig(window="6A"):
@@ -1027,13 +1083,14 @@ app.layout = html.Div([
             chart_readout("chart-tes"),
             chart_hint(),
             dcc.Graph(id="chart-tes", clear_on_unhover=False, config=CHART_CONFIG,
-                style={"marginBottom":"4px","height":"580px"}),
+                style={"marginBottom":"4px","height":"635px"}),
             ], className="dash-card"),
             html.Div([
             html.Section([
                 html.H2("CICLO ECONÓMICO", className="cycle-title"),
                 html.P("Estimación con PIB real e inflación anual al cierre de cada trimestre.",
                        className="cycle-intro"),
+                chart_description("Ciclo económico: fases y activos", cycle_asset_guide()),
                 html.Div([
                     html.Span(f"T{CURRENT_CYCLE['quarter'].quarter} {CURRENT_CYCLE['quarter'].year}",
                               className="cycle-period"),
