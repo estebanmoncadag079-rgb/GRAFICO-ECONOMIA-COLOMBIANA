@@ -278,7 +278,11 @@ def make_fig_bolsa(dff, x_range=None, layers=None):
                 hovertemplate=f"{label} %{{x|%d %b %Y}}: %{{y:.2f}} (base 100)<extra></extra>",
             ))
 
-    fig.add_hline(y=100, line_dash="dot", line_color="#64748b", line_width=1)
+    # Línea base 100 solo si cae dentro de los datos: en ventanas cortas lejos
+    # de 100 obligaba al eje a bajar hasta 100 y aplastaba las series.
+    plotted = pd.concat([pd.Series(trace.y, dtype=float) for trace in fig.data]).dropna()         if fig.data else pd.Series(dtype=float)
+    if not plotted.empty and plotted.min() <= 100 <= plotted.max():
+        fig.add_hline(y=100, line_dash="dot", line_color="#64748b", line_width=1)
 
     visible_start, visible_end = dff["fecha"].min(), dff["fecha"].max()
     if x_range:
@@ -714,7 +718,7 @@ modal = html.Div(id="modal", children=[
                      style={"fontSize":"11px","color":MUTED,"marginBottom":"6px"}),
             html.Div([
                 html.Button(lbl, id=f"detail-btn-{val}", n_clicks=0,
-                    style={"background":"#1c2128","color":TEXT,"border":f"1px solid {BORDER}",
+                    style={"background":"#ffffff","color":TEXT,"border":f"1px solid {BORDER}",
                            "borderRadius":"8px","padding":"6px 14px","fontSize":"13px",
                            "cursor":"pointer","marginRight":"6px"})
                 for lbl, val in [("3 meses","3M"),("6 meses","6M"),("1 año","1A"),
@@ -1311,18 +1315,23 @@ def set_detail_window(*args):
     Input("bolsa-layers","value"),
 )
 def update_detail(variable, window, active_tenors, layers, bolsa_layers):
-    dff = filter_window(df_daily, window or "1A")
+    window = window or "1A"
+    dff = filter_window(df_daily, window)
     if variable == "bolsa":
-        return make_fig_bolsa(filter_window(df_colcap, window or "1A"), layers=bolsa_layers)
+        fig = make_fig_bolsa(filter_window(df_colcap, window), layers=bolsa_layers)
     elif variable == "inflacion":
-        return make_fig_inflacion(dff, show_layers=["inf_mensual","inf_anual"])
+        fig = make_fig_inflacion(dff, show_layers=["inf_mensual","inf_anual"])
     elif variable == "pib":
-        return make_fig_inflacion(dff, show_layers=["pib"])
+        fig = make_fig_inflacion(dff, show_layers=["pib"])
     elif variable == "inf_pib":
-        return make_fig_inflacion(dff, show_layers=["inf_anual","pib"])
+        fig = make_fig_inflacion(dff, show_layers=["inf_anual","pib"])
     elif variable == "tes":
-        return make_fig_tes(dff, active_tenors)
-    return go.Figure()
+        fig = make_fig_tes(dff, active_tenors)
+    else:
+        return go.Figure()
+    # Vista nueva por serie y período: si no, Plotly conserva el zoom anterior
+    # y el período elegido queda fuera de la vista (gráfico "vacío").
+    return fig.update_layout(uirevision=f"{variable}|{window}")
 
 
 # ══════════════════════════════════════════════════════════
