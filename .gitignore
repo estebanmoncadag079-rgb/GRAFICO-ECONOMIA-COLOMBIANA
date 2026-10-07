@@ -10,3 +10,6 @@ venv/
 
 # Herramientas locales
 .gstack/
+
+# Build de GitHub Pages
+site/

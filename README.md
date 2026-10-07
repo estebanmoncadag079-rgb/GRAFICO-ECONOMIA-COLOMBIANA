@@ -9,7 +9,7 @@ Proyecto en Python/Dash para visualizar indicadores economicos y financieros de 
 - Crecimiento real trimestral del PIB DANE.
 - Curva y series historicas de TES en pesos.
 
-El repositorio combina scripts de actualizacion de datos, archivos CSV/Excel limpios y una aplicacion Dash lista para ejecutar localmente o desplegar en Render.
+El repositorio combina scripts de actualizacion de datos, archivos CSV/Excel limpios, la aplicacion Dash para uso local/Render y una version independiente para GitHub Pages.
 
 ## Como ejecutar el dashboard
 
@@ -81,6 +81,28 @@ La actualizacion diaria de GitHub Actions se activa al fusionar el workflow a
 significado exacto de cada columna esta en [DATA_DICTIONARY.md](DATA_DICTIONARY.md).
 
 ## Despliegue
+
+### GitHub Pages
+
+La version publica esta en
+<https://estebanmoncadag079-rgb.github.io/GRAFICO-ECONOMIA-COLOMBIANA/>.
+`exportar_pages.py` genera HTML, JavaScript, figuras Plotly y datos a partir del
+mismo layout y los mismos CSV del dashboard Dash. Las capas, el detalle, la
+curva TES y el ciclo funcionan en el navegador, sin servidor Python ni Render.
+
+Para probarla localmente:
+
+```bash
+python exportar_pages.py
+python -m http.server 8068 --directory site
+```
+
+El workflow `publicar-pages.yml` publica el sitio en cada cambio de `main` y
+despues de una actualizacion validada de indicadores. GitHub Pages debe tener
+como origen **GitHub Actions** en Settings > Pages. El directorio `site/` es
+generado y no se sube al repositorio.
+
+### Render (alternativa)
 
 `render.yaml` define un servicio web en Render que instala `requirements.txt` y levanta la app con Gunicorn:
 
