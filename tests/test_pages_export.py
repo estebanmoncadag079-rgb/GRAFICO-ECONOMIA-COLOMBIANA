@@ -18,6 +18,11 @@ class PagesExportTests(unittest.TestCase):
         self.assertNotIn('id="xrange-store"', markup)
         self.assertIn('src="assets/Logo Schema.png"', markup)
         self.assertIn('data-help="Canasta de este proyecto:', markup)
+        for name in ("Recuperación", "Expansión", "Auge", "Recesión"):
+            self.assertIn(name, markup)
+        for name in ("Impulso con inflación", "Impulso con desinflación",
+                     "Freno con inflación", "Freno con desinflación"):
+            self.assertNotIn(name, markup)
 
     def test_payload_keeps_observed_periods(self):
         payload = build_payload()
@@ -33,6 +38,9 @@ class PagesExportTests(unittest.TestCase):
         with TemporaryDirectory() as folder, patch.object(exportar_pages, "OUTPUT", Path(folder)):
             exportar_pages.build()
             document = (Path(folder) / "index.html").read_text(encoding="utf-8")
+            for name in ("responsive.css", "responsive_layout.css"):
+                self.assertRegex(document, f'<link rel="stylesheet" href="assets/{name}\\?v=[a-f0-9]{{12}}">')
+                self.assertTrue((Path(folder) / "assets" / name).is_file())
             for name in ("label_help.js", "chart_navigation.js"):
                 self.assertRegex(document, f'<script defer src="assets/{name}\\?v=[a-f0-9]{{12}}"></script>')
                 self.assertTrue((Path(folder) / "assets" / name).is_file())

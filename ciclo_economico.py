@@ -4,10 +4,10 @@ import pandas as pd
 
 
 REGIMES = {
-    "impulso_precios": ("Impulso con inflación", "#a45b00"),
-    "impulso_desinflacion": ("Impulso con desinflación", "#087f5b"),
-    "freno_precios": ("Freno con inflación", "#b43d48"),
-    "freno_desinflacion": ("Freno con desinflación", "#3267a8"),
+    "impulso_precios": ("Expansión", "#a45b00"),
+    "impulso_desinflacion": ("Recuperación", "#087f5b"),
+    "freno_precios": ("Auge", "#b43d48"),
+    "freno_desinflacion": ("Recesión", "#3267a8"),
 }
 
 

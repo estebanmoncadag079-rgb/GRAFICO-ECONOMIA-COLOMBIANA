@@ -640,13 +640,13 @@ STORY = latest_story_values()
 
 # Lectura sencilla de cada cuadrante: señales, nombre y qué significa.
 CYCLE_CELL_TEXT = {
-    "freno_precios": ("PIB ▼ · Inflación ▲",
+    "freno_precios": ("PIB ▼ · IPC ▲",
                       "La economía se enfría, pero los precios suben más rápido."),
-    "impulso_precios": ("PIB ▲ · Inflación ▲",
+    "impulso_precios": ("PIB ▲ · IPC ▲",
                         "La economía acelera y los precios también suben más rápido."),
-    "freno_desinflacion": ("PIB ▼ · Inflación ▼",
-                           "La economía se enfría y los precios se moderan."),
-    "impulso_desinflacion": ("PIB ▲ · Inflación ▼",
+    "freno_desinflacion": ("PIB ▼ · IPC ▼",
+                           "El PIB pierde impulso y la inflación se modera; no implica una caída del PIB."),
+    "impulso_desinflacion": ("PIB ▲ · IPC ▼",
                              "La economía acelera mientras los precios se moderan."),
 }
 
@@ -679,13 +679,13 @@ CYCLE_ASSETS = [
         ("Dólar y peso", "Más crecimiento y tasas más altas pueden darle fuerza al peso."),
         ("Petróleo y materias primas", "Más actividad económica ayuda a sostener la demanda."),
     ]),
-    ("freno_precios", "Auge / desaceleración", [
+    ("freno_precios", "Auge", [
         ("Acciones", "Los costos altos y las tasas altas presionan las ganancias de las empresas."),
         ("Bonos y TES", "Si la inflación no baja, las tasas pueden seguir altas."),
         ("Dólar y peso", "El peso se vuelve más sensible a las decisiones del Banco de la República y a la desconfianza."),
         ("Petróleo y materias primas", "Algunas pueden seguir caras por escasez o por la misma inflación."),
     ]),
-    ("freno_desinflacion", "Recesión / contracción", [
+    ("freno_desinflacion", "Recesión", [
         ("Acciones", "Las ganancias y el optimismo suelen debilitarse."),
         ("Bonos y TES", "Si las tasas bajan, los bonos más seguros pueden beneficiarse."),
         ("Dólar y peso", "La gente busca monedas seguras, como el dólar, y el peso puede debilitarse."),
@@ -701,7 +701,7 @@ def cycle_asset_guide():
         phases.append(html.Div([
             html.Div([
                 html.Span(CYCLE_CELL_TEXT[code][0], className="cycle-asset-phase__signals"),
-                html.Strong(f"{phase} · {REGIMES[code][0]}"),
+                html.Strong(phase),
                 html.Span("● Estamos aquí" if current else "", className="cycle-asset-phase__badge"),
             ], className="cycle-asset-phase__head"),
             html.Ul([html.Li([html.B(f"{asset}: "), meaning]) for asset, meaning in assets]),
@@ -712,9 +712,9 @@ def cycle_asset_guide():
                "se recalienta y luego se enfría. En cada etapa, las inversiones suelen "
                "comportarse distinto. Esta guía resume lo que ha pasado normalmente en cada una."),
         *phases,
-        html.P("Ojo: son tendencias que se han visto en el pasado, no predicciones y no son "
-               "recomendaciones de inversión. La fase del tablero es una clasificación "
-               "sencilla y conviene confirmarla con otros datos.", className="cycle-asset-note"),
+        html.P("Estas etiquetas son descriptivas, no son recomendaciones de inversión ni predicciones. "
+               "El cuadrante Recesión no confirma una contracción del PIB; la fase conviene "
+               "contrastarla con otros datos.", className="cycle-asset-note"),
     ], className="cycle-asset-guide")
 
 
@@ -1134,7 +1134,7 @@ app.layout = html.Div([
                        className="cycle-caption"),
                 html.Details([
                     html.Summary("Método y fuentes"),
-                    html.P("El impulso del PIB es el cambio, en puntos porcentuales, de su crecimiento real interanual frente al trimestre anterior. La dirección de precios es el cambio de la inflación anual del IPC entre cierres trimestrales. Esta clasificación descriptiva no mide la intensidad del ciclo ni declara recesiones."),
+                    html.P("El impulso del PIB es el cambio, en puntos porcentuales, de su crecimiento real interanual frente al trimestre anterior. La dirección de precios es el cambio de la inflación anual del IPC entre cierres trimestrales. Los nombres son etiquetas de cuadrantes: Recesión no indica necesariamente una contracción del PIB ni constituye una declaración oficial."),
                     html.P(f"Último trimestre comparable: T{CURRENT_CYCLE['quarter'].quarter} {CURRENT_CYCLE['quarter'].year}. El IPC más reciente es {mes_es(df_inf.iloc[-1]['fecha'])} ({df_inf.iloc[-1]['inflacion_anual']:.2f} %); no se usa para clasificar ese trimestre. Las series pueden ser revisadas por sus fuentes."),
                     html.P([
                         "Fuentes: ",

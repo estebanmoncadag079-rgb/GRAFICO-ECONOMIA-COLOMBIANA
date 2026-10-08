@@ -7,6 +7,17 @@ from ciclo_economico import quarterly_cycle
 
 
 class EconomicChartTests(unittest.TestCase):
+    def test_cycle_quadrants_use_requested_names(self):
+        self.assertEqual(
+            {code: name for code, (name, _) in dashboard.REGIMES.items()},
+            {
+                "impulso_desinflacion": "Recuperación",
+                "impulso_precios": "Expansión",
+                "freno_precios": "Auge",
+                "freno_desinflacion": "Recesión",
+            },
+        )
+
     def test_cycle_uses_only_completed_and_matching_quarters(self):
         gdp = pd.DataFrame({
             "fecha": pd.to_datetime(["2025-10-01", "2026-01-01", "2026-04-01", "2026-07-01"]),

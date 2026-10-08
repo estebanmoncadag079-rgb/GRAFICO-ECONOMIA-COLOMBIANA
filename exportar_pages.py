@@ -154,20 +154,22 @@ def build():
         json.dumps(build_payload(), ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
     )
     markup = render(dashboard.app.layout)
-    help_version = hashlib.sha256((assets / "label_help.js").read_bytes()).hexdigest()[:12]
-    navigation_version = hashlib.sha256((assets / "chart_navigation.js").read_bytes()).hexdigest()[:12]
+    def versioned_asset(name):
+        digest = hashlib.sha256((assets / name).read_bytes()).hexdigest()[:12]
+        return f"assets/{name}?v={digest}"
+
     document = f"""<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="ColombiaMacro: mercado accionario, inflación, PIB, TES y ciclo económico colombiano.">
 <title>ColombiaMacro</title>
-<link rel="stylesheet" href="assets/responsive.css">
-<link rel="stylesheet" href="assets/responsive_layout.css">
+<link rel="stylesheet" href="{versioned_asset('responsive.css')}">
+<link rel="stylesheet" href="{versioned_asset('responsive_layout.css')}">
 <link rel="stylesheet" href="dashboard.css">
 <script defer src="assets/plotly.min.js"></script>
 <script defer src="dashboard.js"></script>
-<script defer src="assets/label_help.js?v={help_version}"></script>
-<script defer src="assets/chart_navigation.js?v={navigation_version}"></script>
+<script defer src="{versioned_asset('label_help.js')}"></script>
+<script defer src="{versioned_asset('chart_navigation.js')}"></script>
 </head><body>{markup}</body></html>
 """
     (OUTPUT / "index.html").write_text(document, encoding="utf-8")
