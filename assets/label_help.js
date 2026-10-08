@@ -61,6 +61,7 @@
   document.addEventListener("keydown", event => { if (event.key === "Escape") hide(); });
   document.addEventListener("click", event => {
     if (popup && popup.contains(event.target)) return;
+    if (event.target.closest(".help-label")) event.preventDefault();
     hide();
     show(event.target);
   });

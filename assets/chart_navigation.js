@@ -100,7 +100,8 @@
 
   function attach() {
     CHARTS.forEach(id => {
-      const gd = document.querySelector(`#${id} .js-plotly-plot`);
+      const host = document.getElementById(id);
+      const gd = host && (host.matches(".js-plotly-plot") ? host : host.querySelector(".js-plotly-plot"));
       if (!gd || gd._fitYAttached || typeof gd.on !== "function") return;
       gd._fitYAttached = true;
       // El primer clic de un doble clic fija una fecha; el doble clic debe

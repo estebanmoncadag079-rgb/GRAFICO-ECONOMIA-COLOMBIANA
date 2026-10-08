@@ -1,6 +1,7 @@
 """Build the browser-only edition of the dashboard for GitHub Pages."""
 
 import html
+import hashlib
 import json
 import re
 import shutil
@@ -143,7 +144,8 @@ def build():
     OUTPUT.mkdir(exist_ok=True)
     assets = OUTPUT / "assets"
     assets.mkdir(exist_ok=True)
-    for name in ("responsive.css", "responsive_layout.css", "Logo Schema.png", "logo universisas.png"):
+    for name in ("responsive.css", "responsive_layout.css", "label_help.js",
+                 "chart_navigation.js", "Logo Schema.png", "logo universisas.png"):
         shutil.copy2(ROOT / "assets" / name, assets / name)
     (assets / "plotly.min.js").write_text(get_plotlyjs(), encoding="utf-8")
     shutil.copy2(ROOT / "pages" / "dashboard.js", OUTPUT / "dashboard.js")
@@ -152,6 +154,8 @@ def build():
         json.dumps(build_payload(), ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
     )
     markup = render(dashboard.app.layout)
+    help_version = hashlib.sha256((assets / "label_help.js").read_bytes()).hexdigest()[:12]
+    navigation_version = hashlib.sha256((assets / "chart_navigation.js").read_bytes()).hexdigest()[:12]
     document = f"""<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -162,6 +166,8 @@ def build():
 <link rel="stylesheet" href="dashboard.css">
 <script defer src="assets/plotly.min.js"></script>
 <script defer src="dashboard.js"></script>
+<script defer src="assets/label_help.js?v={help_version}"></script>
+<script defer src="assets/chart_navigation.js?v={navigation_version}"></script>
 </head><body>{markup}</body></html>
 """
     (OUTPUT / "index.html").write_text(document, encoding="utf-8")
